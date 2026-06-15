@@ -1,0 +1,533 @@
+================================================================================
+  SUDOKU NOVA — PROJECT DESCRIPTION
+================================================================================
+
+  A neon-styled, local-only Sudoku puzzle game built with Flutter and Dart.
+  No backend. All data lives on the device.
+
+================================================================================
+  OVERVIEW
+================================================================================
+
+Sudoku Nova is a fully offline Sudoku game for Android (and Linux desktop for
+development). The UI uses a cyberpunk neon aesthetic — dark backgrounds with
+cyan, green, and purple glows — and includes smooth animations, sound effects,
+and a complete game lifecycle: menu → difficulty selection → gameplay →
+result screen → history tracking.
+
+Target platform  : Android (primary), Linux desktop (development)
+Flutter version  : 3.41.8 / Dart 3.11.5
+State management : Riverpod (StateNotifier + FutureProvider)
+Navigation       : go_router (declarative, URI-based)
+Local database   : sqflite (SQLite) — game history and best times
+Lightweight store: shared_preferences — in-progress game, settings
+Sound            : audioplayers — correct/wrong/win/lose effects
+
+================================================================================
+  ARCHITECTURE — FOUR LAYERS
+================================================================================
+
+  engine/    Pure Dart, zero Flutter imports. Sudoku logic (solver, generator,
+             validator, difficulty rater). Fully unit-testable in isolation.
+
+  data/      Models, DAOs, repositories. sqflite + shared_preferences. No UI.
+
+  features/  Flutter screens and widgets, one subfolder per screen.
+
+  core/      Theme, router, constants, formatters, sound service.
+
+================================================================================
+  ENGINE LAYER  (lib/engine/)
+================================================================================
+
+Constraint: no Flutter imports. Runs on background isolates.
+
+sudoku_solver.dart
+  - SudokuSolver.solve(grid)                 Recursive backtracking solver
+  - SudokuSolver.isValidPlacement(g,r,c,n)  Row/col/box constraint check
+  - SudokuSolver.countSolutions(g, limit)   Count solutions up to limit
+                                             (used for uniqueness validation)
+
+sudoku_validator.dart
+  - isValidMove(grid, row, col, num)        Is this digit legal here?
+  - isComplete(grid)                        Full grid, no conflicts?
+  - isCellCorrect(solution, row, col, val)  Does user entry match solution?
+
+sudoku_generator.dart
+  - generateSolution()                      Random valid 9×9 grid (backtracking
+                                            with shuffled digit order)
+  - generatePuzzle(EngineGivenDifficulty)   Remove cells from solution until
+                                            target clue count reached; each
+                                            removal verified unique via solver
+  - generatePuzzleIsolate(difficultyName)   compute()-compatible entry point
+                                            returns {'puzzle':…, 'solution':…}
+
+difficulty_rater.dart
+  - EngineGivenDifficulty enum              easy / medium / hard / impossible
+  - countClues(puzzle)                      Count non-zero cells
+  - rateByClues(puzzle)                     easy≥40, medium≥32, hard≥27, else impossible
+  - targetRemovalCount(difficulty)          Cells to remove: 38/45/52/57
+
+================================================================================
+  DATA LAYER  (lib/data/)
+================================================================================
+
+--- MODELS ---
+
+difficulty.dart
+  enum Difficulty { easy, medium, hard, impossible }
+  DifficultyExtension:
+    .displayName    "Easy" / "Medium" / "Hard" / "Impossible"
+    .label          lowercase string used for DB storage
+    .toEngine()     maps to EngineGivenDifficulty
+    .maxLives       5 / 4 / 3 / 1
+    .fromString()   parses string → enum
+
+game_record.dart
+  Immutable completed game snapshot written to SQLite.
+  Fields: id?, difficulty, durationSeconds, won, mistakes, completedAt
+  toMap() / fromMap() for sqflite serialization.
+
+saved_game.dart
+  Immutable in-progress game snapshot for resume.
+  Fields: currentGrid, puzzle, solution, difficulty, elapsedSeconds,
+          livesLeft, hintsLeft
+  toJsonString() / fromJsonString() for SharedPreferences.
+
+game_state.dart  (lives in features/game/state/)
+  GamePhase enum: loading / playing / won / lost
+  GameState (immutable, copyWith):
+    currentGrid, puzzle, solution, difficulty, phase
+    selectedRow, selectedCol
+    livesLeft, hintsLeft, elapsedSeconds
+    mistakeCells (Set<int> of flattened r*9+c indices)
+    undoStack (List of grid snapshots)
+    notesMode (pencil toggle)
+    notes (Map<int, Set<int>> candidates per cell)
+  Helpers: isGiven, isSelected, isMistake, isCorrect, isHighlighted,
+           isSameNumber, notesFor
+
+--- DATA SOURCES ---
+
+database_helper.dart
+  Singleton. Lazy-initializes SQLite DB.
+  On Linux/desktop: uses sqflite_common_ffi + system libsqlite3.so.0.
+  Creates table game_history:
+    id INTEGER PK AUTOINCREMENT
+    difficulty TEXT NOT NULL
+    duration_seconds INTEGER NOT NULL
+    won INTEGER NOT NULL
+    mistakes INTEGER NOT NULL
+    completed_at TEXT NOT NULL
+
+game_history_dao.dart
+  insert(GameRecord)              Write completed game row
+  getAll()                        All rows, ordered by completed_at DESC
+  getBestTime(Difficulty)         MIN(duration_seconds) WHERE won=1 AND difficulty=?
+  deleteAll()                     Wipe history
+
+settings_store.dart
+  SharedPreferences wrapper:
+    sound_enabled      bool   (default true)
+    saved_game_json    string (JSON of SavedGame, null when no game in progress)
+    theme_mode         string "system" | "light" | "dark"  (default "system")
+
+--- REPOSITORIES ---
+
+game_repository.dart
+  saveRecord(GameRecord)          Insert into DB
+  getHistory()                    Fetch all records
+  saveCurrentGame(SavedGame)      Persist to SharedPreferences
+  loadCurrentGame()               Load from SharedPreferences
+  clearCurrentGame()              Remove from SharedPreferences
+
+stats_repository.dart
+  getBestTime(Difficulty)         Single difficulty best time
+  getAllBestTimes()                Map<Difficulty, int?> for all four difficulties
+
+================================================================================
+  FEATURES LAYER  (lib/features/)
+================================================================================
+
+--- MENU  (features/menu/) ---
+
+MenuScreen
+  Providers:
+    bestTimesProvider   FutureProvider.autoDispose  → getAllBestTimes()
+    savedGameProvider   FutureProvider.autoDispose  → loadCurrentGame()
+  Layout (top to bottom):
+    "SUDOKU NOVA" title — gradient shader (cyan → purple)
+    "Challenge your mind" subtitle
+    PLAY button (cyan) → /difficulty
+    RESUME button (green) — shown only when saved game exists → /game?resume=true
+    BEST SCORES — 2×2 grid of BestScoreCard, one per difficulty
+    HISTORY button → /history
+    Settings icon → /settings
+
+BestScoreCard
+  Shows best time per difficulty (or "--:--" if none).
+  Color-coded: Easy=green, Medium=cyan, Hard=purple, Impossible=red.
+
+--- DIFFICULTY  (features/difficulty/) ---
+
+DifficultyScreen
+  Four buttons (Easy / Medium / Hard / Impossible), each with:
+    Color-coded neon border and icon
+    Subtitle description ("Great for beginners", etc.)
+    Arrow indicator
+  Tap → context.go('/game?difficulty=<label>')
+
+--- GAME  (features/game/) ---
+
+GameScreen (ConsumerStatefulWidget + WidgetsBindingObserver)
+  initState:
+    postFrameCallback (async):
+      Sets onGameOver callback on controller
+      If resume=true: loads SavedGame → controller.resumeGame()
+      Else: controller.startNewGame(difficulty)
+  WidgetsBindingObserver: pauses timer on app background, resumes on foreground
+  PopScope(canPop: false): intercepts Android back → saves game, goes to "/"
+  AppBar: difficulty name, back button
+  Body: _LoadingView (spinner) or _GameView
+
+GameController (StateNotifier<GameState>, autoDispose)
+  Providers: gameControllerProvider, gameDifficultyProvider
+  startNewGame(difficulty)
+    Stops timer, resets state to loading
+    compute() → SudokuGenerator.generatePuzzleIsolate on background thread
+    Sets state to playing with difficulty.maxLives lives
+    Starts 1-second timer, persists game immediately
+  resumeGame(SavedGame)
+    Restores full game state from saved snapshot, starts timer
+  enterNumber(number)
+    Notes mode: toggles candidate in notes map
+    Correct entry: updates grid, removes from mistakeCells, auto-persist
+      If grid complete → game won → save record → navigate to result
+    Wrong entry: adds to mistakeCells, decrements livesLeft
+      If livesLeft hits 0 → game lost → save record → navigate to result
+      Else → update state, persist
+  erase()
+    If notes exist → clears notes first
+    Else → sets cell to 0, removes from mistakeCells
+  undo()
+    Pops grid snapshot from undoStack, recalculates mistakeCells
+  hint()
+    Finds first wrong/empty non-given cell (prefers selected)
+    Sets it to solution value, decrements hintsLeft
+    Checks for win condition
+  toggleNotesMode()
+  pauseTimer() / resumeTimer()
+  _onGameOver(won)
+    Snapshots state values
+    Checks best time (try-catch for DB errors)
+    Saves GameRecord to DB (before navigation)
+    Clears saved game from SharedPreferences
+    Calls onGameOver callback → navigation to result screen
+  onGameOver callback: set by GameScreen in postFrameCallback
+  Auto-persist: _persistGame() called on every state-changing action
+
+SudokuBoard (ConsumerWidget)
+  LayoutBuilder → fixed square size
+  CustomPaint (_BoardGridPainter):
+    Thin lines (0.5px, 50% border color) between cells
+    Thick lines (2px, 40% cyan) around 3×3 boxes
+    Outer border (2.5px, 60% cyan)
+  81 SudokuCell widgets in 9-column grid
+
+SudokuCell (StatelessWidget)
+  Background priority: mistake red > selected cyan > same-number highlight >
+                       highlighted (same row/col/box) > given dim > normal
+  Text color: mistake red > correct green > given white > user-entered cyan
+  value=0 + notes: shows _NotesGrid (3×3 micro-grid of candidates in purple)
+  value≠0: animated Text (scale 0.6→1 + fadeIn over 120ms)
+
+NumberPad
+  9 buttons (1–9) in a horizontal row
+  Each: 36×48 container, cyan border, number text
+  Tap → controller.enterNumber(number)
+
+GameHud
+  Left: heart icons (filled=life remaining, outline=lost)
+        Count = gameState.difficulty.maxLives
+  Center: MM:SS timer in rounded cyan-bordered container
+  Right: lightbulb icon + hint count in purple badge
+
+ActionButtons
+  Undo, Erase, Hint, Notes — four icon+label buttons
+  Undo: disabled (opacity 0.4) if undoStack empty
+  Hint: disabled if hintsLeft == 0
+  Notes: green highlight when notesMode active
+
+--- RESULT  (features/result/) ---
+
+ResultScreen
+  Win: trophy icon, "Puzzle Solved!", time, "New Best Time!" badge if applicable
+  Loss: sad icon, "Game Over", time
+  Buttons: PLAY AGAIN (same difficulty), HOME
+  Staggered animations: icon (elastic scale 400ms) → title (slide+fade 300ms) →
+                        stats card (slide+fade 300ms) → buttons (fade 250ms)
+
+--- HISTORY  (features/history/) ---
+
+HistoryScreen
+  historyProvider: FutureProvider.autoDispose → getHistory()
+  Sorted by date DESC, rendered as ListView of HistoryTile
+
+HistoryTile
+  Difficulty badge (color-coded, uppercase label)
+  Date (human-readable)
+  Won / Lost text (green or red)
+  Right-aligned: MM:SS time + mistake count
+
+--- SETTINGS  (features/settings/) ---
+
+SettingsScreen
+  soundEnabledProvider: StateNotifierProvider<SoundSettingNotifier, bool>
+    Persists to SharedPreferences on toggle
+    Notifies SoundService in app.dart via ref.listen
+  themeModeProvider: StateNotifierProvider<ThemeModeNotifier, ThemeMode>
+    Persists 'system'|'light'|'dark' to SharedPreferences
+
+  Sections:
+    APPEARANCE — Three-way theme toggle (System / Light / Dark)
+                 Animated segment buttons with purple glow on selection
+    AUDIO      — Sound effects Switch (cyan track when on)
+    ABOUT      — Version 1.0.0
+
+================================================================================
+  CORE LAYER  (lib/core/)
+================================================================================
+
+--- THEME ---
+
+AppColorsExtension (ThemeExtension<AppColorsExtension>)
+  Two static palettes: AppColorsExtension.dark / .light
+  Named tokens:
+    background      Dark: #0D1117    Light: #F0F4F8
+    surface         Dark: #1A2332    Light: #FFFFFF
+    surfaceVariant  Dark: #1E2D3D    Light: #E8EFF7
+    primaryNeon     Dark: #00F5FF    Light: #0095A8  (cyan)
+    secondaryNeon   Dark: #39FF14    Light: #1A8C00  (green)
+    accentPurple    Dark: #BF5FFF    Light: #7C3AED
+    errorRed        Dark: #FF4444    Light: #DC2626
+    textPrimary     Dark: #E8F4F8    Light: #0F172A
+    textSecondary   Dark: #8CA0B3    Light: #475569
+    textDisabled    Dark: #3D5166    Light: #94A3B8
+    border          Dark: #2A3F54    Light: #CBD5E1
+    divider         Dark: #1E3048    Light: #E2E8F0
+    overlayDark     Dark: #0A0F1680  Light: #0F172240
+  copyWith() / lerp() for ThemeExtension contract
+  AppColorsContext extension: context.appColors shorthand
+
+AppTheme
+  static ThemeData darkTheme   uses AppColorsExtension.dark + Brightness.dark
+  static ThemeData lightTheme  uses AppColorsExtension.light + Brightness.light
+  Configures: ColorScheme, AppBarTheme, TextTheme, CardTheme, ButtonTheme,
+              SnackBarTheme, DialogTheme — all using color tokens
+
+--- ROUTER ---
+
+AppRoutes constants
+  root         /
+  difficulty   /difficulty
+  game         /game
+  history      /history
+  settings     /settings
+  result       /result
+
+GoRouter — six routes:
+  /                                          MenuScreen
+  /difficulty                                DifficultyScreen
+  /game?difficulty=X&resume=Y               GameScreen (difficulty string + bool)
+  /history                                   HistoryScreen
+  /settings                                  SettingsScreen
+  /result?won=X&duration=Y                   ResultScreen
+        &difficulty=Z&isNewBest=W
+
+--- CONSTANTS ---
+
+AppConstants
+  gridSize = 9
+  maxLives = 3    (legacy; active lives now come from Difficulty.maxLives)
+  maxHints = 3
+  boxSize  = 3
+
+--- UTILS ---
+
+DurationFormatter.format(seconds)   → "02:05" (MM:SS)
+DateFormatter.format(DateTime)      → "Jun 15, 2026"
+
+--- SERVICES ---
+
+SoundService (singleton)
+  AudioPlayer via audioplayers package
+  playCorrect() / playWrong() / playWin() / playLose()
+  setSoundEnabled(bool) — respected by all play methods
+  Haptic feedback on each play
+  Graceful: silent if sound disabled or asset missing
+
+================================================================================
+  APP ENTRY  (lib/)
+================================================================================
+
+main.dart
+  WidgetsFlutterBinding.ensureInitialized()
+  Desktop (Linux/Windows/macOS): sqfliteFfiInit() + databaseFactory = ffi
+  runApp(ProviderScope(child: SudokuNovaApp()))
+
+app.dart
+  SudokuNovaApp (ConsumerWidget)
+  ref.watch(themeModeProvider) → MaterialApp.router themeMode
+  ref.listen(soundEnabledProvider) → SoundService().setSoundEnabled()
+  MaterialApp.router(theme: lightTheme, darkTheme: darkTheme, router: appRouter)
+
+pubspec.yaml  hooks.user_defines.sqlite3:
+  source: system
+  name_linux: /usr/lib/x86_64-linux-gnu/libsqlite3.so.0
+  (tells sqlite3 3.x build hook to use system library on Linux instead of
+   trying to download/compile a native asset)
+
+================================================================================
+  DEPENDENCIES
+================================================================================
+
+flutter_riverpod    ^2.5.0    State management (providers, notifiers)
+go_router           ^14.0.0   Navigation (URI-based, query params)
+sqflite             ^2.3.0    SQLite database (Android native plugin)
+sqflite_common_ffi  ^2.3.0    SQLite via FFI (Linux/Windows/macOS desktop)
+sqlite3             ^3.3.3    Native SQLite3 bindings (transitive, configured above)
+shared_preferences  ^2.2.0    Lightweight key-value store
+intl                ^0.19.0   Date/number formatting
+google_fonts        ^6.2.0    Custom font loading
+flutter_animate     ^4.5.0    Animation helpers (fadeIn, scale, slideY, etc.)
+audioplayers        ^6.0.0    Audio playback + haptic feedback
+
+Dev dependencies:
+flutter_lints           ^6.0.0    Lint rules
+flutter_launcher_icons  ^0.14.0   Generate Android launcher icons
+flutter_native_splash   ^2.4.0    Generate Android splash screen
+
+Assets:
+  assets/icon/     app_icon.png, splash_logo.png
+  assets/sounds/   correct.mp3, wrong.mp3, win.mp3, lose.mp3
+
+================================================================================
+  GAME FLOW
+================================================================================
+
+1. Launch          → MenuScreen
+                     Shows PLAY, optional RESUME, best scores per difficulty,
+                     HISTORY, Settings
+
+2. Select mode     → DifficultyScreen
+                     Easy / Medium / Hard / Impossible
+                     Each shows description and color-coded neon button
+
+3. Generate        → GameScreen (loading state)
+                     Spinner while puzzle generates on background isolate
+                     (prevents UI freeze, especially on Impossible)
+
+4. Play            → GameScreen (playing state)
+                     Board: 9×9 grid with neon box borders
+                     HUD: hearts (lives), timer, hint count
+                     Action bar: Undo / Erase / Hint / Notes toggle
+                     Number pad: digits 1–9
+                     Cell colors: given (dim) / selected (cyan) / correct (green) /
+                                  mistake (red) / same-number (highlight)
+                     Notes mode: enter pencil-mark candidates (shown as 3×3 micro-grid)
+                     Every move auto-saved to SharedPreferences
+
+5. Win             → phase = won
+                     ResultScreen: "Puzzle Solved!", time, "New Best Time!" if applicable
+                     Record saved to SQLite game_history table
+
+6. Loss            → phase = lost (lives reach 0)
+                     ResultScreen: "Game Over", time
+                     Record saved to SQLite game_history table
+
+7. After result    → PLAY AGAIN (new game, same difficulty) or HOME
+
+8. Exit mid-game   → Back button or ← in AppBar
+                     Game state stays in SharedPreferences
+                     MenuScreen shows RESUME button
+                     Starting a new game clears old saved state
+
+9. History         → HistoryScreen lists all completed games:
+                     date / difficulty badge / won|lost / time / mistakes
+
+10. Settings       → Theme: System / Light / Dark (persisted)
+                     Sound: On / Off (persisted)
+
+================================================================================
+  PERSISTENCE STRATEGY
+================================================================================
+
+In-progress game  SharedPreferences key "saved_game_json"
+                  Written on every move, read on resume, deleted on game over
+
+Completed games   SQLite table "game_history"
+                  One row per completed game (won or lost)
+                  Best time = MIN(duration_seconds) WHERE won=1 AND difficulty=?
+
+Settings          SharedPreferences
+                  "sound_enabled"  bool
+                  "theme_mode"     "system" | "light" | "dark"
+
+Database init     Lazy singleton (DatabaseHelper.instance)
+                  Race-safe: uses shared Future (_initFuture ??= _initDatabase())
+                  so concurrent callers await the same initialization
+
+================================================================================
+  DIFFICULTY SYSTEM
+================================================================================
+
+  Difficulty    Clues    Missing cells    Lives    Generator target
+  ----------    -----    ------------     -----    ----------------
+  Easy          40–45    36–41            5        remove 38 cells
+  Medium        32–39    42–49            4        remove 45 cells
+  Hard          27–31    50–54            3        remove 52 cells
+  Impossible    22–26    55–59            1        remove 57 cells
+
+Puzzle uniqueness: every removed cell is verified to still leave exactly
+one solution before the removal is committed. This guarantee makes hints
+and undo always valid.
+
+================================================================================
+  LIVES SYSTEM
+================================================================================
+
+Lives are shown as heart icons in the HUD. The count is difficulty-specific:
+Easy=5, Medium=4, Hard=3, Impossible=1.
+
+When a wrong digit is entered:
+  - Cell background turns red
+  - livesLeft decremented
+  - Wrong digit stays in cell (must be erased manually)
+  - If livesLeft reaches 0 → GamePhase.lost → result screen
+
+================================================================================
+  TESTING
+================================================================================
+
+test/engine/sudoku_solver_test.dart      Unit tests for solver
+test/engine/sudoku_validator_test.dart   Unit tests for validator
+test/features/sudoku_board_test.dart     Widget test for board rendering
+test/features/number_pad_test.dart       Widget test for number pad
+
+Run all:    flutter test
+Run single: flutter test test/engine/sudoku_solver_test.dart
+
+================================================================================
+  DEVELOPER COMMANDS
+================================================================================
+
+flutter run                              Run on connected device/emulator
+flutter run -d linux                     Run as Linux desktop app
+flutter test                             Run all tests
+flutter test test/engine/...            Run specific test file
+flutter analyze                          Lint check
+flutter build apk --debug               Debug APK
+flutter build apk --release             Release APK
+flutter build linux --debug             Linux desktop debug build
+
+================================================================================
