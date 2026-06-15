@@ -34,7 +34,7 @@ class ActionButtons extends ConsumerWidget {
             color: colors.primaryNeon,
           ),
           _ActionButton(
-            icon: Icons.lightbulb_outline,
+            icon: Icons.lightbulb_rounded,
             label: 'Hint (${gameState.hintsLeft})',
             onTap: canHint ? () => controller.hint() : null,
             color: canHint ? colors.accentPurple : colors.textDisabled,
@@ -43,8 +43,7 @@ class ActionButtons extends ConsumerWidget {
             icon: Icons.edit_note_rounded,
             label: 'Notes',
             onTap: () => controller.toggleNotesMode(),
-            color:
-                notesActive ? colors.secondaryNeon : colors.primaryNeon,
+            color: notesActive ? colors.secondaryNeon : colors.primaryNeon,
             isActive: notesActive,
           ),
         ],
@@ -53,7 +52,7 @@ class ActionButtons extends ConsumerWidget {
   }
 }
 
-class _ActionButton extends StatelessWidget {
+class _ActionButton extends StatefulWidget {
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
@@ -69,47 +68,83 @@ class _ActionButton extends StatelessWidget {
   });
 
   @override
+  State<_ActionButton> createState() => _ActionButtonState();
+}
+
+class _ActionButtonState extends State<_ActionButton> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
-    final surface = context.appColors.surface;
+    final colors = context.appColors;
+    final enabled = widget.onTap != null;
+
     return GestureDetector(
-      onTap: onTap,
+      onTapDown: enabled ? (_) => setState(() => _pressed = true) : null,
+      onTapUp: enabled
+          ? (_) {
+              setState(() => _pressed = false);
+              widget.onTap!();
+            }
+          : null,
+      onTapCancel: enabled ? () => setState(() => _pressed = false) : null,
       child: Opacity(
-        opacity: onTap == null ? 0.4 : 1.0,
+        opacity: enabled ? 1.0 : 0.35,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: isActive
-                    ? color.withValues(alpha: 0.18)
-                    : surface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color:
-                      color.withValues(alpha: isActive ? 0.7 : 0.3),
-                  width: isActive ? 1.5 : 1,
+            AnimatedScale(
+              scale: _pressed ? 0.88 : 1.0,
+              duration: const Duration(milliseconds: 80),
+              curve: Curves.easeOut,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 120),
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: widget.isActive
+                      ? widget.color.withValues(alpha: 0.20)
+                      : _pressed
+                          ? widget.color.withValues(alpha: 0.14)
+                          : colors.surfaceVariant,
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(
+                    color: widget.color.withValues(
+                      alpha: widget.isActive
+                          ? 0.85
+                          : _pressed
+                              ? 0.80
+                              : 0.40,
+                    ),
+                    width: widget.isActive || _pressed ? 1.5 : 1.0,
+                  ),
+                  boxShadow: widget.isActive
+                      ? [
+                          BoxShadow(
+                            color: widget.color.withValues(alpha: 0.30),
+                            blurRadius: 12,
+                          ),
+                        ]
+                      : _pressed
+                          ? [
+                              BoxShadow(
+                                color: widget.color.withValues(alpha: 0.18),
+                                blurRadius: 8,
+                              ),
+                            ]
+                          : null,
                 ),
-                boxShadow: isActive
-                    ? [
-                        BoxShadow(
-                          color: color.withValues(alpha: 0.3),
-                          blurRadius: 10,
-                        ),
-                      ]
-                    : null,
+                child: Icon(widget.icon, color: widget.color, size: 24),
               ),
-              child: Icon(icon, color: color, size: 24),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 7),
             Text(
-              label,
+              widget.label,
               style: TextStyle(
-                color: color,
+                color: widget.color,
                 fontSize: 11,
-                fontWeight: FontWeight.w500,
+                fontWeight:
+                    widget.isActive ? FontWeight.w700 : FontWeight.w500,
               ),
             ),
           ],

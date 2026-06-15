@@ -125,4 +125,29 @@ class GameState {
   Set<int> notesFor(int row, int col) {
     return notes[row * 9 + col] ?? const {};
   }
+
+  bool isRowComplete(int row) {
+    for (int c = 0; c < 9; c++) {
+      if (currentGrid[row][c] == 0 || currentGrid[row][c] != solution[row][c]) return false;
+    }
+    return true;
+  }
+
+  bool isColComplete(int col) {
+    for (int r = 0; r < 9; r++) {
+      if (currentGrid[r][col] == 0 || currentGrid[r][col] != solution[r][col]) return false;
+    }
+    return true;
+  }
+
+  bool isBoxComplete(int box) {
+    final br = (box ~/ 3) * 3;
+    final bc = (box % 3) * 3;
+    for (int r = br; r < br + 3; r++) {
+      for (int c = bc; c < bc + 3; c++) {
+        if (currentGrid[r][c] == 0 || currentGrid[r][c] != solution[r][c]) return false;
+      }
+    }
+    return true;
+  }
 }

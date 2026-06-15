@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sudoku/core/theme/app_colors.dart';
@@ -34,7 +35,9 @@ class MenuScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 60),
+              const SizedBox(height: 56),
+
+              // Title
               ShaderMask(
                 shaderCallback: (bounds) => LinearGradient(
                   colors: [colors.primaryNeon, colors.accentPurple],
@@ -51,8 +54,13 @@ class MenuScreen extends ConsumerWidget {
                     letterSpacing: 4,
                   ),
                 ),
-              ),
+              )
+                  .animate()
+                  .fadeIn(duration: 400.ms, curve: Curves.easeOut)
+                  .slideY(begin: -0.25, end: 0, duration: 400.ms, curve: Curves.easeOut),
+
               const SizedBox(height: 8),
+
               Text(
                 'Challenge your mind',
                 textAlign: TextAlign.center,
@@ -61,14 +69,21 @@ class MenuScreen extends ConsumerWidget {
                   fontSize: 14,
                   letterSpacing: 1.5,
                 ),
-              ),
-              const SizedBox(height: 48),
+              )
+                  .animate(delay: 100.ms)
+                  .fadeIn(duration: 350.ms)
+                  .slideY(begin: 0.2, end: 0, duration: 350.ms, curve: Curves.easeOut),
+
+              const SizedBox(height: 44),
 
               _NeonButton(
                 label: 'PLAY',
                 color: colors.primaryNeon,
                 onTap: () => context.push('/difficulty'),
-              ),
+              )
+                  .animate(delay: 200.ms)
+                  .fadeIn(duration: 300.ms)
+                  .slideY(begin: 0.25, end: 0, duration: 300.ms, curve: Curves.easeOut),
 
               savedGameAsync.when(
                 loading: () => const SizedBox.shrink(),
@@ -76,18 +91,20 @@ class MenuScreen extends ConsumerWidget {
                 data: (saved) {
                   if (saved == null) return const SizedBox.shrink();
                   return Padding(
-                    padding: const EdgeInsets.only(top: 16.0),
+                    padding: const EdgeInsets.only(top: 14.0),
                     child: _NeonButton(
-                      label:
-                          'RESUME  ${saved.difficulty.displayName.toUpperCase()}',
+                      label: 'RESUME  ${saved.difficulty.displayName.toUpperCase()}',
                       color: colors.secondaryNeon,
                       onTap: () => context.go('/game?resume=true'),
-                    ),
+                    )
+                        .animate(delay: 280.ms)
+                        .fadeIn(duration: 300.ms)
+                        .slideY(begin: 0.25, end: 0, duration: 300.ms, curve: Curves.easeOut),
                   );
                 },
               ),
 
-              const SizedBox(height: 40),
+              const SizedBox(height: 36),
 
               Row(
                 children: [
@@ -95,18 +112,25 @@ class MenuScreen extends ConsumerWidget {
                     'BEST SCORES',
                     style: TextStyle(
                       color: colors.textSecondary,
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 2,
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Container(height: 1, color: colors.border),
+                    child: Container(
+                      height: 1,
+                      color: colors.border.withValues(alpha: 0.8),
+                    ),
                   ),
                 ],
-              ),
-              const SizedBox(height: 16),
+              )
+                  .animate(delay: 340.ms)
+                  .fadeIn(duration: 300.ms),
+
+              const SizedBox(height: 14),
+
               bestTimesAsync.when(
                 loading: () => Center(
                   child: CircularProgressIndicator(
@@ -123,17 +147,27 @@ class MenuScreen extends ConsumerWidget {
                   crossAxisCount: 2,
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
                   childAspectRatio: 2.4,
-                  children: Difficulty.values.map((d) {
+                  children: Difficulty.values.indexed.map((entry) {
+                    final (i, d) = entry;
                     return BestScoreCard(
                       difficulty: d,
                       bestTime: bestTimes[d],
-                    );
+                    )
+                        .animate(delay: (380 + i * 60).ms)
+                        .fadeIn(duration: 280.ms)
+                        .scale(
+                          begin: const Offset(0.88, 0.88),
+                          end: const Offset(1, 1),
+                          duration: 280.ms,
+                          curve: Curves.easeOut,
+                        );
                   }).toList(),
                 ),
               ),
+
               const Spacer(),
 
               Row(
@@ -152,7 +186,11 @@ class MenuScreen extends ConsumerWidget {
                     onTap: () => context.push('/settings'),
                   ),
                 ],
-              ),
+              )
+                  .animate(delay: 500.ms)
+                  .fadeIn(duration: 300.ms)
+                  .slideY(begin: 0.2, end: 0, duration: 300.ms, curve: Curves.easeOut),
+
               const SizedBox(height: 32),
             ],
           ),
@@ -162,7 +200,7 @@ class MenuScreen extends ConsumerWidget {
   }
 }
 
-class _NeonButton extends StatelessWidget {
+class _NeonButton extends StatefulWidget {
   final String label;
   final Color color;
   final VoidCallback onTap;
@@ -174,31 +212,53 @@ class _NeonButton extends StatelessWidget {
   });
 
   @override
+  State<_NeonButton> createState() => _NeonButtonState();
+}
+
+class _NeonButtonState extends State<_NeonButton> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 18),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color, width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: color.withValues(alpha: 0.25),
-              blurRadius: 16,
-              spreadRadius: 0,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.96 : 1.0,
+        duration: const Duration(milliseconds: 80),
+        curve: Curves.easeOut,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 80),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(vertical: 18),
+          decoration: BoxDecoration(
+            color: widget.color.withValues(alpha: _pressed ? 0.2 : 0.12),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: widget.color.withValues(alpha: _pressed ? 1.0 : 0.85),
+              width: 1.5,
             ),
-          ],
-        ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: color,
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 3,
+            boxShadow: [
+              BoxShadow(
+                color: widget.color.withValues(alpha: _pressed ? 0.4 : 0.25),
+                blurRadius: _pressed ? 20 : 16,
+                spreadRadius: 0,
+              ),
+            ],
+          ),
+          child: Text(
+            widget.label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: widget.color,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 3,
+            ),
           ),
         ),
       ),
@@ -206,7 +266,7 @@ class _NeonButton extends StatelessWidget {
   }
 }
 
-class _IconNeonButton extends StatelessWidget {
+class _IconNeonButton extends StatefulWidget {
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
@@ -218,19 +278,39 @@ class _IconNeonButton extends StatelessWidget {
   });
 
   @override
+  State<_IconNeonButton> createState() => _IconNeonButtonState();
+}
+
+class _IconNeonButtonState extends State<_IconNeonButton> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 58,
-        padding: const EdgeInsets.symmetric(vertical: 18),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-              color: color.withValues(alpha: 0.5), width: 1.5),
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.91 : 1.0,
+        duration: const Duration(milliseconds: 80),
+        curve: Curves.easeOut,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 80),
+          width: 58,
+          padding: const EdgeInsets.symmetric(vertical: 18),
+          decoration: BoxDecoration(
+            color: widget.color.withValues(alpha: _pressed ? 0.15 : 0.08),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: widget.color.withValues(alpha: _pressed ? 0.9 : 0.5),
+              width: 1.5,
+            ),
+          ),
+          child: Icon(widget.icon, color: widget.color, size: 22),
         ),
-        child: Icon(icon, color: color, size: 22),
       ),
     );
   }

@@ -38,20 +38,24 @@ class ResultScreen extends StatelessWidget {
             children: [
               Center(
                 child: Container(
-                  width: 96,
-                  height: 96,
+                  width: 100,
+                  height: 100,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: accentColor.withValues(alpha: 0.12),
+                    border: Border.all(
+                      color: accentColor.withValues(alpha: 0.4),
+                      width: 1.5,
+                    ),
                     boxShadow: [
                       BoxShadow(
-                        color: accentColor.withValues(alpha: 0.35),
-                        blurRadius: 32,
+                        color: accentColor.withValues(alpha: 0.4),
+                        blurRadius: 36,
                         spreadRadius: 4,
                       ),
                     ],
                   ),
-                  child: Icon(icon, color: accentColor, size: 52),
+                  child: Icon(icon, color: accentColor, size: 54),
                 )
                     .animate()
                     .scale(
@@ -76,10 +80,11 @@ class ResultScreen extends StatelessWidget {
               )
                   .animate(delay: 200.ms)
                   .slideY(
-                      begin: 0.3,
-                      end: 0,
-                      duration: 300.ms,
-                      curve: Curves.easeOut)
+                    begin: 0.3,
+                    end: 0,
+                    duration: 300.ms,
+                    curve: Curves.easeOut,
+                  )
                   .fadeIn(duration: 300.ms),
               const SizedBox(height: 8),
 
@@ -95,18 +100,24 @@ class ResultScreen extends StatelessWidget {
                   ),
                 ),
 
-              const SizedBox(height: 40),
+              const SizedBox(height: 36),
 
               Container(
                 padding: const EdgeInsets.symmetric(
                     vertical: 24, horizontal: 32),
                 decoration: BoxDecoration(
-                  color: colors.surface,
+                  color: colors.surfaceVariant,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: accentColor.withValues(alpha: 0.25),
-                    width: 1,
+                    color: accentColor.withValues(alpha: 0.4),
+                    width: 1.5,
                   ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: accentColor.withValues(alpha: 0.08),
+                      blurRadius: 16,
+                    ),
+                  ],
                 ),
                 child: Column(
                   children: [
@@ -122,13 +133,18 @@ class ResultScreen extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 8),
                         decoration: BoxDecoration(
-                          color: colors.secondaryNeon
-                              .withValues(alpha: 0.12),
+                          color: colors.secondaryNeon.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: colors.secondaryNeon
-                                .withValues(alpha: 0.5),
+                            color: colors.secondaryNeon.withValues(alpha: 0.6),
+                            width: 1.5,
                           ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: colors.secondaryNeon.withValues(alpha: 0.2),
+                              blurRadius: 10,
+                            ),
+                          ],
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -156,7 +172,7 @@ class ResultScreen extends StatelessWidget {
                   .fadeIn(duration: 300.ms)
                   .slideY(begin: 0.2, end: 0, duration: 300.ms),
 
-              const SizedBox(height: 48),
+              const SizedBox(height: 44),
 
               _ResultButton(
                 label: 'PLAY AGAIN',
@@ -165,7 +181,7 @@ class ResultScreen extends StatelessWidget {
                   '/game?difficulty=${difficulty ?? 'easy'}',
                 ),
               ).animate(delay: 500.ms).fadeIn(duration: 250.ms),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
 
               _ResultButton(
                 label: 'HOME',
@@ -216,7 +232,7 @@ class _StatRow extends StatelessWidget {
   }
 }
 
-class _ResultButton extends StatelessWidget {
+class _ResultButton extends StatefulWidget {
   final String label;
   final Color color;
   final VoidCallback onTap;
@@ -228,31 +244,51 @@ class _ResultButton extends StatelessWidget {
   });
 
   @override
+  State<_ResultButton> createState() => _ResultButtonState();
+}
+
+class _ResultButtonState extends State<_ResultButton> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.10),
-          borderRadius: BorderRadius.circular(14),
-          border:
-              Border.all(color: color.withValues(alpha: 0.5), width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: color.withValues(alpha: 0.15),
-              blurRadius: 12,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.96 : 1.0,
+        duration: const Duration(milliseconds: 80),
+        curve: Curves.easeOut,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 80),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          decoration: BoxDecoration(
+            color: widget.color.withValues(alpha: _pressed ? 0.18 : 0.10),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: widget.color.withValues(alpha: _pressed ? 0.9 : 0.55),
+              width: 1.5,
             ),
-          ],
-        ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: color,
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 2.5,
+            boxShadow: [
+              BoxShadow(
+                color: widget.color.withValues(alpha: _pressed ? 0.25 : 0.12),
+                blurRadius: 12,
+              ),
+            ],
+          ),
+          child: Text(
+            widget.label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: widget.color,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 2.5,
+            ),
           ),
         ),
       ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sudoku/core/theme/app_colors.dart';
@@ -122,14 +123,22 @@ class SettingsScreen extends ConsumerWidget {
         centerTitle: true,
       ),
       body: ListView(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         children: [
-          _SectionLabel(label: 'APPEARANCE'),
+          _SectionLabel(label: 'APPEARANCE')
+              .animate(delay: 60.ms)
+              .fadeIn(duration: 300.ms)
+              .slideY(begin: 0.15, end: 0, duration: 300.ms, curve: Curves.easeOut),
           const SizedBox(height: 8),
-          _ThemeToggleTile(isDark: isDark, themeMode: themeMode),
+          _ThemeToggleTile(isDark: isDark, themeMode: themeMode)
+              .animate(delay: 110.ms)
+              .fadeIn(duration: 300.ms)
+              .slideY(begin: 0.15, end: 0, duration: 300.ms, curve: Curves.easeOut),
           const SizedBox(height: 24),
-          _SectionLabel(label: 'AUDIO'),
+          _SectionLabel(label: 'AUDIO')
+              .animate(delay: 170.ms)
+              .fadeIn(duration: 300.ms)
+              .slideY(begin: 0.15, end: 0, duration: 300.ms, curve: Curves.easeOut),
           const SizedBox(height: 8),
           _SettingsTile(
             icon: soundEnabled
@@ -147,20 +156,32 @@ class SettingsScreen extends ConsumerWidget {
               inactiveThumbColor: colors.textDisabled,
               inactiveTrackColor: colors.border,
             ),
-          ),
+          )
+              .animate(delay: 220.ms)
+              .fadeIn(duration: 300.ms)
+              .slideY(begin: 0.15, end: 0, duration: 300.ms, curve: Curves.easeOut),
           const SizedBox(height: 24),
-          _SectionLabel(label: 'ABOUT'),
+          _SectionLabel(label: 'ABOUT')
+              .animate(delay: 280.ms)
+              .fadeIn(duration: 300.ms)
+              .slideY(begin: 0.15, end: 0, duration: 300.ms, curve: Curves.easeOut),
           const SizedBox(height: 8),
           _SettingsTile(
             icon: Icons.info_outline_rounded,
             label: 'Version',
             subtitle: '1.0.0',
-          ),
+          )
+              .animate(delay: 330.ms)
+              .fadeIn(duration: 300.ms)
+              .slideY(begin: 0.15, end: 0, duration: 300.ms, curve: Curves.easeOut),
           _SettingsTile(
             icon: Icons.grid_on_rounded,
             label: 'Sudoku Nova',
             subtitle: 'A neon-styled puzzle game',
-          ),
+          )
+              .animate(delay: 380.ms)
+              .fadeIn(duration: 300.ms)
+              .slideY(begin: 0.15, end: 0, duration: 300.ms, curve: Curves.easeOut),
         ],
       ),
     );
@@ -168,7 +189,7 @@ class SettingsScreen extends ConsumerWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Theme toggle tile — three-way: System / Light / Dark
+// Theme toggle tile
 // ---------------------------------------------------------------------------
 
 class _ThemeToggleTile extends ConsumerWidget {
@@ -186,9 +207,9 @@ class _ThemeToggleTile extends ConsumerWidget {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: colors.surface,
+        color: colors.surfaceVariant,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: colors.border, width: 1),
+        border: Border.all(color: colors.border.withValues(alpha: 0.8), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -241,7 +262,6 @@ class _ThemeToggleTile extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 14),
-          // Segmented control: System / Light / Dark
           Row(
             children: [
               _ThemeSegment(
@@ -288,8 +308,7 @@ class _ThemeSegment extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
-    final color =
-        selected ? colors.accentPurple : colors.textDisabled;
+    final color = selected ? colors.accentPurple : colors.textDisabled;
 
     return Expanded(
       child: GestureDetector(
@@ -327,9 +346,8 @@ class _ThemeSegment extends StatelessWidget {
                 style: TextStyle(
                   color: color,
                   fontSize: 11,
-                  fontWeight: selected
-                      ? FontWeight.w700
-                      : FontWeight.w500,
+                  fontWeight:
+                      selected ? FontWeight.w700 : FontWeight.w500,
                 ),
               ),
             ],
@@ -352,14 +370,25 @@ class _SectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
-    return Text(
-      label,
-      style: TextStyle(
-        color: colors.textSecondary,
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 2,
-      ),
+    return Row(
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: colors.textSecondary,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 2,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Container(
+            height: 1,
+            color: colors.border.withValues(alpha: 0.8),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -382,12 +411,11 @@ class _SettingsTile extends StatelessWidget {
     final colors = context.appColors;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: colors.surface,
+        color: colors.surfaceVariant,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: colors.border, width: 1),
+        border: Border.all(color: colors.border.withValues(alpha: 0.8), width: 1),
       ),
       child: Row(
         children: [
@@ -424,7 +452,7 @@ class _SettingsTile extends StatelessWidget {
               ],
             ),
           ),
-          ?trailing,
+          if (trailing case final Widget t) t,
         ],
       ),
     );

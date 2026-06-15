@@ -1,45 +1,63 @@
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/services.dart';
 
-/// Manages haptic feedback and sound effects.
-///
-/// Sound files go in assets/sounds/:
-///   correct.mp3  — placed when a correct number is entered
-///   wrong.mp3    — placed when a wrong number is entered
-///   win.mp3      — played when the puzzle is completed
-///   lose.mp3     — played when all lives are lost
-///
-/// Sounds are silently skipped if the files are missing or if sound is disabled.
+import 'tone_generator.dart';
+
+/// Plays game sound effects via programmatically generated WAV tones.
+/// No asset files required — all audio is synthesised at runtime.
 class SoundService {
   static final SoundService _instance = SoundService._();
   factory SoundService() => _instance;
-  SoundService._();
+
+  SoundService._() {
+    // Pre-generate all tones eagerly so first playback has no lag.
+    ToneGenerator.correct;
+    ToneGenerator.wrong;
+    ToneGenerator.win;
+    ToneGenerator.lose;
+    ToneGenerator.hint;
+    ToneGenerator.undo;
+    ToneGenerator.erase;
+  }
 
   final AudioPlayer _player = AudioPlayer();
   bool _soundEnabled = true;
 
-  void setSoundEnabled(bool enabled) {
-    _soundEnabled = enabled;
-  }
+  void setSoundEnabled(bool enabled) => _soundEnabled = enabled;
 
   Future<void> playCorrect() async {
     await _haptic(HapticFeedback.lightImpact);
-    await _play('sounds/correct.mp3');
+    await _play(ToneGenerator.correct);
   }
 
   Future<void> playWrong() async {
     await _haptic(HapticFeedback.mediumImpact);
-    await _play('sounds/wrong.mp3');
+    await _play(ToneGenerator.wrong);
   }
 
   Future<void> playWin() async {
     await _haptic(HapticFeedback.heavyImpact);
-    await _play('sounds/win.mp3');
+    await _play(ToneGenerator.win);
   }
 
   Future<void> playLose() async {
     await _haptic(HapticFeedback.heavyImpact);
-    await _play('sounds/lose.mp3');
+    await _play(ToneGenerator.lose);
+  }
+
+  Future<void> playHint() async {
+    await _haptic(HapticFeedback.selectionClick);
+    await _play(ToneGenerator.hint);
+  }
+
+  Future<void> playUndo() async {
+    await _haptic(HapticFeedback.selectionClick);
+    await _play(ToneGenerator.undo);
+  }
+
+  Future<void> playErase() async {
+    await _haptic(HapticFeedback.selectionClick);
+    await _play(ToneGenerator.erase);
   }
 
   Future<void> _haptic(Future<void> Function() fn) async {
@@ -48,16 +66,12 @@ class SoundService {
     } catch (_) {}
   }
 
-  Future<void> _play(String assetPath) async {
+  Future<void> _play(Uint8List bytes) async {
     if (!_soundEnabled) return;
     try {
-      await _player.play(AssetSource(assetPath));
-    } catch (_) {
-      // Sound file missing or audio unavailable — silently skip.
-    }
+      await _player.play(BytesSource(bytes));
+    } catch (_) {}
   }
 
-  void dispose() {
-    _player.dispose();
-  }
+  void dispose() => _player.dispose();
 }

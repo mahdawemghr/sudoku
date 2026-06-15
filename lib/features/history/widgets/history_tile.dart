@@ -27,23 +27,42 @@ class HistoryTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.appColors;
     final color = _difficultyColor(colors);
+    final resultColor = record.won ? colors.secondaryNeon : colors.errorRed;
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      padding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      margin: const EdgeInsets.symmetric(vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: colors.surface,
+        color: colors.surfaceVariant,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: colors.border, width: 1),
+        border: Border.all(
+          color: colors.border.withValues(alpha: 0.8),
+          width: 1,
+        ),
       ),
       child: Row(
         children: [
+          // Result indicator strip
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            width: 3,
+            height: 44,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
+              color: resultColor,
+              borderRadius: BorderRadius.circular(2),
+              boxShadow: [
+                BoxShadow(
+                  color: resultColor.withValues(alpha: 0.5),
+                  blurRadius: 6,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Difficulty badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
                 color: color.withValues(alpha: 0.5),
@@ -76,9 +95,7 @@ class HistoryTile extends StatelessWidget {
                 Text(
                   record.won ? 'Won' : 'Lost',
                   style: TextStyle(
-                    color: record.won
-                        ? colors.secondaryNeon
-                        : colors.errorRed,
+                    color: resultColor,
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                   ),

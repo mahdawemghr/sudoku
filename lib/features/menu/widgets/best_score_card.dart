@@ -30,19 +30,26 @@ class BestScoreCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.appColors;
     final color = _difficultyColor(colors);
-    final timeLabel =
-        bestTime != null ? DurationFormatter.format(bestTime!) : '--:--';
+    final hasTime = bestTime != null;
+    final timeLabel = hasTime ? DurationFormatter.format(bestTime!) : '--:--';
 
     return Container(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(12),
+        color: colors.surfaceVariant,
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: color.withValues(alpha: 0.35),
-          width: 1,
+          color: color.withValues(alpha: hasTime ? 0.6 : 0.25),
+          width: 1.5,
         ),
+        boxShadow: hasTime
+            ? [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.12),
+                  blurRadius: 10,
+                ),
+              ]
+            : null,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -57,11 +64,11 @@ class BestScoreCard extends StatelessWidget {
               letterSpacing: 1.2,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 5),
           Text(
             timeLabel,
             style: TextStyle(
-              color: colors.textPrimary,
+              color: hasTime ? colors.textPrimary : colors.textDisabled,
               fontSize: 18,
               fontWeight: FontWeight.w700,
               fontFamily: 'monospace',

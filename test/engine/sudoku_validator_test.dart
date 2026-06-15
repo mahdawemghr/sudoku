@@ -3,7 +3,7 @@ import 'package:sudoku/engine/sudoku_validator.dart';
 
 void main() {
   // A complete, valid Sudoku grid for use in tests.
-  List<List<int>> _completedGrid() => [
+  List<List<int>> completedGrid() => [
         [5, 3, 4, 6, 7, 8, 9, 1, 2],
         [6, 7, 2, 1, 9, 5, 3, 4, 8],
         [1, 9, 8, 3, 4, 2, 5, 6, 7],
@@ -16,33 +16,33 @@ void main() {
       ];
 
   // The same grid with one cell cleared.
-  List<List<int>> _partialGrid() {
-    final g = _completedGrid();
+  List<List<int>> partialGrid() {
+    final g = completedGrid();
     g[4][4] = 0;
     return g;
   }
 
   group('SudokuValidator.isValidMove()', () {
     test('returns true for a valid placement', () {
-      final grid = _partialGrid(); // (4,4) is 0
+      final grid = partialGrid(); // (4,4) is 0
       // The original value at (4,4) was 5 — placing 5 should be valid.
       expect(SudokuValidator.isValidMove(grid, 4, 4, 5), isTrue);
     });
 
     test('returns false for a row conflict', () {
-      final grid = _partialGrid();
+      final grid = partialGrid();
       // Row 4 contains: 4,2,6,8,_,3,7,9,1 — placing 4 conflicts
       expect(SudokuValidator.isValidMove(grid, 4, 4, 4), isFalse);
     });
 
     test('returns false for a column conflict', () {
-      final grid = _partialGrid();
+      final grid = partialGrid();
       // Column 4 contains: 7,9,4,6,_,2,3,1,8 — placing 7 conflicts
       expect(SudokuValidator.isValidMove(grid, 4, 4, 7), isFalse);
     });
 
     test('returns false for a box conflict', () {
-      final grid = _partialGrid();
+      final grid = partialGrid();
       // Center box (rows 3-5, cols 3-5) contains: 7,6,1,8,_,3,9,2,4
       // Placing 7 conflicts with the box value at (3,3)
       expect(SudokuValidator.isValidMove(grid, 4, 4, 7), isFalse);
@@ -51,15 +51,15 @@ void main() {
 
   group('SudokuValidator.isComplete()', () {
     test('returns true for a fully valid grid', () {
-      expect(SudokuValidator.isComplete(_completedGrid()), isTrue);
+      expect(SudokuValidator.isComplete(completedGrid()), isTrue);
     });
 
     test('returns false for a grid with zeros', () {
-      expect(SudokuValidator.isComplete(_partialGrid()), isFalse);
+      expect(SudokuValidator.isComplete(partialGrid()), isFalse);
     });
 
     test('returns false for a grid with conflicts', () {
-      final grid = _completedGrid();
+      final grid = completedGrid();
       // Introduce a conflict: overwrite (0,1) from 3 to 5 (same as (0,0))
       grid[0][1] = 5;
       expect(SudokuValidator.isComplete(grid), isFalse);
@@ -68,12 +68,12 @@ void main() {
 
   group('SudokuValidator.isCellCorrect()', () {
     test('returns true when cell value matches solution', () {
-      final solution = _completedGrid();
+      final solution = completedGrid();
       expect(SudokuValidator.isCellCorrect(solution, 0, 0, 5), isTrue);
     });
 
     test('returns false when cell value does not match solution', () {
-      final solution = _completedGrid();
+      final solution = completedGrid();
       expect(SudokuValidator.isCellCorrect(solution, 0, 0, 9), isFalse);
     });
   });

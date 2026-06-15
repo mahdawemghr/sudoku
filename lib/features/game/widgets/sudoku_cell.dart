@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:sudoku/core/theme/app_colors.dart';
 
-class SudokuCell extends StatelessWidget {
+class SudokuCell extends StatefulWidget {
   final int value;
   final bool isGiven;
   final bool isSelected;
@@ -11,6 +11,7 @@ class SudokuCell extends StatelessWidget {
   final bool isHighlighted;
   final bool isSameNumber;
   final Set<int> notes;
+  final int? celebrationStep;
   final VoidCallback onTap;
 
   const SudokuCell({
@@ -24,111 +25,290 @@ class SudokuCell extends StatelessWidget {
     required this.isSameNumber,
     required this.notes,
     required this.onTap,
+    this.celebrationStep,
   });
+
+  @override
+  State<SudokuCell> createState() => _SudokuCellState();
+}
+
+class _SudokuCellState extends State<SudokuCell>
+    with TickerProviderStateMixin {
+  // Selection pulse
+  late final AnimationController _selectCtrl;
+  late final Animation<double> _selectScale;
+
+  // Highlight entrance flash
+  late final AnimationController _highlightCtrl;
+  late final Animation<double> _highlightFlash;
+
+  // Celebration bounce + glow
+  late final AnimationController _celebCtrl;
+  late final Animation<double> _celebScale;
+  late final Animation<double> _celebGlow;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _highlightCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 240),
+    );
+    _highlightFlash = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 30),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0), weight: 70),
+    ]).animate(CurvedAnimation(parent: _highlightCtrl, curve: Curves.easeOut));
+
+    _selectCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+    );
+    _selectScale = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.10), weight: 35),
+      TweenSequenceItem(tween: Tween(begin: 1.10, end: 0.97), weight: 30),
+      TweenSequenceItem(tween: Tween(begin: 0.97, end: 1.0), weight: 35),
+    ]).animate(CurvedAnimation(parent: _selectCtrl, curve: Curves.easeOut));
+
+    _celebCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 450),
+    );
+    _celebScale = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.20), weight: 25),
+      TweenSequenceItem(tween: Tween(begin: 1.20, end: 0.92), weight: 25),
+      TweenSequenceItem(tween: Tween(begin: 0.92, end: 1.04), weight: 25),
+      TweenSequenceItem(tween: Tween(begin: 1.04, end: 1.0), weight: 25),
+    ]).animate(CurvedAnimation(parent: _celebCtrl, curve: Curves.easeOut));
+    _celebGlow = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 20),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.6), weight: 30),
+      TweenSequenceItem(tween: Tween(begin: 0.6, end: 0.0), weight: 50),
+    ]).animate(_celebCtrl);
+  }
+
+  @override
+  void didUpdateWidget(SudokuCell old) {
+    super.didUpdateWidget(old);
+
+    // Highlight entrance flash
+    if (!old.isHighlighted && widget.isHighlighted) {
+      _highlightCtrl.forward(from: 0.0);
+    }
+
+    // Pulse on selection
+    if (!old.isSelected && widget.isSelected) {
+      _selectCtrl.forward(from: 0.0);
+    }
+
+    // Celebrate when a new step is assigned
+    if (old.celebrationStep == null && widget.celebrationStep != null) {
+      final delay = widget.celebrationStep! * 48;
+      Future.delayed(Duration(milliseconds: delay), () {
+        if (mounted) _celebCtrl.forward(from: 0.0);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _highlightCtrl.dispose();
+    _selectCtrl.dispose();
+    _celebCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
 
-    final Color backgroundColor;
-    if (isMistake) {
-      backgroundColor = colors.errorRed.withValues(alpha: 0.22);
-    } else if (isSelected) {
-      backgroundColor = colors.primaryNeon.withValues(alpha: 0.18);
-    } else if (isSameNumber) {
-      backgroundColor = colors.primaryNeon.withValues(alpha: 0.10);
-    } else if (isHighlighted) {
-      backgroundColor = colors.surfaceVariant;
-    } else if (isGiven) {
-      backgroundColor = colors.surface.withValues(alpha: 0.7);
+    // Alpha values scaled up in light mode — primaryNeon is dark teal (#0095A8) on white,
+    // so 9% is invisible. Dark mode uses bright cyan (#00F5FF) where even 9% pops.
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final selectedAlpha   = isDark ? 0.22 : 0.42;
+    final sameNumAlpha    = isDark ? 0.12 : 0.26;
+    final highlightAlpha  = isDark ? 0.09 : 0.18;
+    final mistakeAlpha    = isDark ? 0.20 : 0.18;
+
+    // Background priority: mistake > selected > sameNumber > highlight > given > default
+    final Color bg;
+    if (widget.isMistake) {
+      bg = colors.errorRed.withValues(alpha: mistakeAlpha);
+    } else if (widget.isSelected) {
+      bg = colors.primaryNeon.withValues(alpha: selectedAlpha);
+    } else if (widget.isSameNumber) {
+      bg = colors.primaryNeon.withValues(alpha: sameNumAlpha);
+    } else if (widget.isHighlighted) {
+      bg = colors.primaryNeon.withValues(alpha: highlightAlpha);
+    } else if (widget.isGiven) {
+      bg = colors.surfaceVariant;
     } else {
-      backgroundColor = colors.surface;
+      bg = colors.surface;
     }
 
     final Color textColor;
-    if (isMistake) {
+    final FontWeight textWeight;
+    final double textSize;
+    if (widget.isMistake) {
       textColor = colors.errorRed;
-    } else if (isCorrect) {
-      textColor = colors.secondaryNeon;
-    } else if (isGiven) {
+      textWeight = FontWeight.w700;
+      textSize = 18;
+    } else if (widget.isGiven) {
       textColor = colors.textPrimary;
+      textWeight = FontWeight.w800;
+      textSize = 19;
+    } else if (widget.isCorrect) {
+      textColor = colors.secondaryNeon;
+      textWeight = FontWeight.w600;
+      textSize = 18;
     } else {
       textColor = colors.primaryNeon;
+      textWeight = FontWeight.w500;
+      textSize = 18;
     }
 
-    final borderColor =
-        isSelected ? colors.primaryNeon : Colors.transparent;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
+    final cellContent = GestureDetector(
+      onTap: widget.onTap,
+      child: Container(
         decoration: BoxDecoration(
-          color: backgroundColor,
-          border: Border.all(
-            color: borderColor,
-            width: isSelected ? 2.0 : 0.0,
-          ),
+          color: bg,
+          boxShadow: widget.isSelected
+              ? [
+                  BoxShadow(
+                    color: colors.primaryNeon
+                        .withValues(alpha: isDark ? 0.45 : 0.35),
+                    blurRadius: 8,
+                    spreadRadius: 0,
+                  ),
+                ]
+              : null,
         ),
         child: Center(
-          child: value != 0
+          child: widget.value != 0
               ? Text(
-                  '$value',
-                  key: ValueKey(value),
+                  '${widget.value}',
+                  key: ValueKey(widget.value),
                   style: TextStyle(
                     color: textColor,
-                    fontSize: 18,
-                    fontWeight:
-                        isGiven ? FontWeight.bold : FontWeight.w500,
+                    fontSize: textSize,
+                    fontWeight: textWeight,
                   ),
                 )
                   .animate()
                   .scale(
                     begin: const Offset(0.6, 0.6),
-                    end: const Offset(1, 1),
+                    end: const Offset(1.0, 1.0),
                     duration: 120.ms,
                     curve: Curves.easeOut,
                   )
                   .fadeIn(duration: 80.ms)
-              : notes.isNotEmpty
-                  ? _NotesGrid(notes: notes)
+              : widget.notes.isNotEmpty
+                  ? _NotesGrid(notes: widget.notes, colors: colors)
                   : null,
         ),
       ),
     );
+
+    return AnimatedBuilder(
+      animation: Listenable.merge([_highlightCtrl, _selectCtrl, _celebCtrl]),
+      builder: (context, child) {
+        final scale = _selectScale.value *
+            (_celebCtrl.isAnimating ? _celebScale.value : 1.0);
+        final celebGlow = _celebGlow.value;
+        final hlFlash = _highlightFlash.value;
+
+        return Transform.scale(
+          scale: scale,
+          child: Stack(
+            children: [
+              child!,
+              // Highlight entrance flash (primaryNeon, subtle)
+              if (hlFlash > 0)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: colors.primaryNeon.withValues(alpha: hlFlash * 0.28),
+                        boxShadow: [
+                          BoxShadow(
+                            color: colors.primaryNeon
+                                .withValues(alpha: hlFlash * 0.40),
+                            blurRadius: 10 * hlFlash,
+                            spreadRadius: 0,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              // Celebration glow overlay (secondaryNeon, stronger)
+              if (celebGlow > 0)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: colors.secondaryNeon
+                            .withValues(alpha: celebGlow * 0.38),
+                        boxShadow: [
+                          BoxShadow(
+                            color: colors.secondaryNeon
+                                .withValues(alpha: celebGlow * 0.55),
+                            blurRadius: 12 * celebGlow,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+      child: cellContent,
+    );
   }
 }
 
+/// 3×3 candidate notes rendered without GridView — lighter and reliable in small cells.
 class _NotesGrid extends StatelessWidget {
   final Set<int> notes;
+  final AppColorsExtension colors;
 
-  const _NotesGrid({required this.notes});
+  const _NotesGrid({required this.notes, required this.colors});
 
   @override
   Widget build(BuildContext context) {
-    final accentPurple = context.appColors.accentPurple;
     return Padding(
-      padding: const EdgeInsets.all(1.5),
-      child: GridView.count(
-        crossAxisCount: 3,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        children: List.generate(9, (i) {
-          final n = i + 1;
-          return Center(
-            child: notes.contains(n)
-                ? Text(
-                    '$n',
-                    style: TextStyle(
-                      color: accentPurple,
-                      fontSize: 7,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  )
-                : const SizedBox.shrink(),
-          );
-        }),
+      padding: const EdgeInsets.all(1.0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _noteRow([1, 2, 3]),
+          _noteRow([4, 5, 6]),
+          _noteRow([7, 8, 9]),
+        ],
       ),
+    );
+  }
+
+  Widget _noteRow(List<int> nums) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: nums.map((n) {
+        return SizedBox(
+          width: 10,
+          child: Text(
+            notes.contains(n) ? '$n' : '',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: colors.accentPurple,
+              fontSize: 7,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }

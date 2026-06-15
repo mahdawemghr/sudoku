@@ -125,7 +125,11 @@ class GameController extends StateNotifier<GameState> {
 
   void selectCell(int row, int col) {
     if (state.phase != GamePhase.playing) return;
-    state = state.copyWith(selectedRow: row, selectedCol: col);
+    if (state.selectedRow == row && state.selectedCol == col) {
+      state = state.copyWith(selectedRow: -1, selectedCol: -1);
+    } else {
+      state = state.copyWith(selectedRow: row, selectedCol: col);
+    }
   }
 
   void enterNumber(int number) {
@@ -174,10 +178,10 @@ class GameController extends StateNotifier<GameState> {
     if (number != state.solution[r][c]) {
       newMistakes.add(flatIndex);
       _totalMistakes++;
-      _sound.playWrong();
 
       final newLives = state.livesLeft - 1;
       if (newLives <= 0) {
+        _sound.playLose();
         _stopTimer();
         state = state.copyWith(
           currentGrid: newGrid,
@@ -189,6 +193,7 @@ class GameController extends StateNotifier<GameState> {
         );
         _onGameOver(won: false);
       } else {
+        _sound.playWrong();
         state = state.copyWith(
           currentGrid: newGrid,
           undoStack: newUndoStack,
@@ -235,6 +240,7 @@ class GameController extends StateNotifier<GameState> {
     if (state.notes.containsKey(key)) {
       final newNotes = Map<int, Set<int>>.from(state.notes)..remove(key);
       state = state.copyWith(notes: newNotes);
+      _sound.playErase();
       _persistGame();
       return;
     }
@@ -256,6 +262,7 @@ class GameController extends StateNotifier<GameState> {
       undoStack: newUndoStack,
       mistakeCells: newMistakes,
     );
+    _sound.playErase();
     _persistGame();
   }
 
@@ -281,6 +288,7 @@ class GameController extends StateNotifier<GameState> {
       undoStack: newStack,
       mistakeCells: newMistakes,
     );
+    _sound.playUndo();
     _persistGame();
   }
 
@@ -329,8 +337,10 @@ class GameController extends StateNotifier<GameState> {
     if (_isGridComplete(newGrid)) {
       _stopTimer();
       state = state.copyWith(phase: GamePhase.won);
+      _sound.playWin();
       _onGameOver(won: true);
     } else {
+      _sound.playHint();
       _persistGame();
     }
   }

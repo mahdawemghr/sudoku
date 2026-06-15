@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sudoku/core/theme/app_colors.dart';
@@ -53,7 +54,6 @@ class _GameScreenState extends ConsumerState<GameScreen>
         if (saved != null) {
           await controller.resumeGame(saved);
         } else {
-          // Saved game disappeared — start fresh instead.
           await controller.startNewGame(_difficulty);
         }
       } else {
@@ -82,8 +82,6 @@ class _GameScreenState extends ConsumerState<GameScreen>
   void _exitToHome() {
     final controller = ref.read(gameControllerProvider.notifier);
     controller.pauseTimer();
-    // Game is already saved on every move (and on startNewGame).
-    // Just navigate — the saved state stays in SharedPreferences.
     context.go('/');
   }
 
@@ -107,26 +105,44 @@ class _GameScreenState extends ConsumerState<GameScreen>
                 color: colors.textSecondary),
             onPressed: _exitToHome,
           ),
-          title: Text(
-            gameState.isLoading ? '' : gameState.difficulty.displayName,
-            style: TextStyle(
-              color: colors.textPrimary,
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
+          title: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            child: gameState.isLoading
+                ? const SizedBox.shrink()
+                : Text(
+                    gameState.difficulty.displayName,
+                    key: const ValueKey('title'),
+                    style: TextStyle(
+                      color: colors.textPrimary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
           ),
           centerTitle: true,
         ),
-        body: gameState.isLoading
-            ? const _LoadingView()
-            : _GameView(phase: gameState.phase),
+        body: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 450),
+          switchInCurve: Curves.easeOut,
+          switchOutCurve: Curves.easeIn,
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.96, end: 1.0).animate(animation),
+              child: child,
+            ),
+          ),
+          child: gameState.isLoading
+              ? const _LoadingView(key: ValueKey('loading'))
+              : _GameView(key: const ValueKey('game'), phase: gameState.phase),
+        ),
       ),
     );
   }
 }
 
 class _LoadingView extends StatelessWidget {
-  const _LoadingView();
+  const _LoadingView({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -138,15 +154,20 @@ class _LoadingView extends StatelessWidget {
           CircularProgressIndicator(
             color: colors.primaryNeon,
             strokeWidth: 2,
-          ),
-          const SizedBox(height: 16),
+          )
+              .animate(onPlay: (c) => c.repeat())
+              .rotate(duration: 1200.ms, curve: Curves.linear),
+          const SizedBox(height: 20),
           Text(
             'Generating puzzle…',
             style: TextStyle(
               color: colors.textSecondary,
               fontSize: 14,
             ),
-          ),
+          )
+              .animate()
+              .fadeIn(duration: 400.ms)
+              .slideY(begin: 0.2, end: 0, duration: 400.ms),
         ],
       ),
     );
@@ -156,24 +177,41 @@ class _LoadingView extends StatelessWidget {
 class _GameView extends StatelessWidget {
   final GamePhase phase;
 
-  const _GameView({required this.phase});
+  const _GameView({super.key, required this.phase});
 
   @override
   Widget build(BuildContext context) {
-    return const SafeArea(
+    return SafeArea(
       child: Column(
         children: [
-          GameHud(),
-          SizedBox(height: 8),
+          const GameHud()
+              .animate()
+              .fadeIn(duration: 300.ms, curve: Curves.easeOut)
+              .slideY(begin: -0.15, end: 0, duration: 300.ms, curve: Curves.easeOut),
+          const SizedBox(height: 6),
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8.0),
-            child: SudokuBoard(),
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            child: const SudokuBoard()
+                .animate(delay: 80.ms)
+                .fadeIn(duration: 350.ms, curve: Curves.easeOut)
+                .scale(
+                  begin: const Offset(0.94, 0.94),
+                  end: const Offset(1, 1),
+                  duration: 350.ms,
+                  curve: Curves.easeOut,
+                ),
           ),
-          SizedBox(height: 16),
-          ActionButtons(),
-          SizedBox(height: 20),
-          NumberPad(),
-          SizedBox(height: 16),
+          const SizedBox(height: 14),
+          const ActionButtons()
+              .animate(delay: 160.ms)
+              .fadeIn(duration: 300.ms)
+              .slideY(begin: 0.15, end: 0, duration: 300.ms, curve: Curves.easeOut),
+          const SizedBox(height: 18),
+          const NumberPad()
+              .animate(delay: 220.ms)
+              .fadeIn(duration: 300.ms)
+              .slideY(begin: 0.2, end: 0, duration: 300.ms, curve: Curves.easeOut),
+          const SizedBox(height: 16),
         ],
       ),
     );
