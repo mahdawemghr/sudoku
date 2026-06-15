@@ -10,39 +10,38 @@ class HistoryTile extends StatelessWidget {
 
   const HistoryTile({super.key, required this.record});
 
-  Color get _difficultyColor {
+  Color _difficultyColor(AppColorsExtension colors) {
     switch (record.difficulty) {
       case Difficulty.easy:
-        return AppColors.secondaryNeon;
+        return colors.secondaryNeon;
       case Difficulty.medium:
-        return AppColors.primaryNeon;
+        return colors.primaryNeon;
       case Difficulty.hard:
-        return AppColors.accentPurple;
+        return colors.accentPurple;
       case Difficulty.impossible:
-        return AppColors.errorRed;
+        return colors.errorRed;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final color = _difficultyColor;
+    final colors = context.appColors;
+    final color = _difficultyColor(colors);
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: colors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: AppColors.border,
-          width: 1,
-        ),
+        border: Border.all(color: colors.border, width: 1),
       ),
       child: Row(
         children: [
-          // Difficulty badge
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(8),
@@ -62,15 +61,14 @@ class HistoryTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 14),
-          // Middle: date + outcome
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   DateFormatter.format(record.completedAt),
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
+                  style: TextStyle(
+                    color: colors.textSecondary,
                     fontSize: 12,
                   ),
                 ),
@@ -79,8 +77,8 @@ class HistoryTile extends StatelessWidget {
                   record.won ? 'Won' : 'Lost',
                   style: TextStyle(
                     color: record.won
-                        ? AppColors.secondaryNeon
-                        : AppColors.errorRed,
+                        ? colors.secondaryNeon
+                        : colors.errorRed,
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                   ),
@@ -88,14 +86,13 @@ class HistoryTile extends StatelessWidget {
               ],
             ),
           ),
-          // Right: time + mistakes
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
                 DurationFormatter.format(record.durationSeconds),
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
+                style: TextStyle(
+                  color: colors.textPrimary,
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                   fontFamily: 'monospace',
@@ -104,8 +101,8 @@ class HistoryTile extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 '${record.mistakes} mistake${record.mistakes == 1 ? '' : 's'}',
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
+                style: TextStyle(
+                  color: colors.textSecondary,
                   fontSize: 11,
                 ),
               ),

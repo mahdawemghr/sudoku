@@ -10,8 +10,11 @@ class ActionButtons extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.read(gameControllerProvider.notifier);
     final gameState = ref.watch(gameControllerProvider);
+    final colors = context.appColors;
 
     final canUndo = gameState.undoStack.isNotEmpty;
+    final canHint = gameState.hintsLeft > 0;
+    final notesActive = gameState.notesMode;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -22,27 +25,27 @@ class ActionButtons extends ConsumerWidget {
             icon: Icons.undo_rounded,
             label: 'Undo',
             onTap: canUndo ? () => controller.undo() : null,
-            color: canUndo
-                ? AppColors.primaryNeon
-                : AppColors.textDisabled,
+            color: canUndo ? colors.primaryNeon : colors.textDisabled,
           ),
           _ActionButton(
             icon: Icons.backspace_outlined,
             label: 'Erase',
             onTap: () => controller.erase(),
-            color: AppColors.primaryNeon,
+            color: colors.primaryNeon,
           ),
           _ActionButton(
             icon: Icons.lightbulb_outline,
-            label: 'Hint',
-            onTap: null, // Stub for Phase 5
-            color: AppColors.textDisabled,
+            label: 'Hint (${gameState.hintsLeft})',
+            onTap: canHint ? () => controller.hint() : null,
+            color: canHint ? colors.accentPurple : colors.textDisabled,
           ),
           _ActionButton(
             icon: Icons.edit_note_rounded,
             label: 'Notes',
-            onTap: null, // Stub for Phase 5
-            color: AppColors.textDisabled,
+            onTap: () => controller.toggleNotesMode(),
+            color:
+                notesActive ? colors.secondaryNeon : colors.primaryNeon,
+            isActive: notesActive,
           ),
         ],
       ),
@@ -55,16 +58,19 @@ class _ActionButton extends StatelessWidget {
   final String label;
   final VoidCallback? onTap;
   final Color color;
+  final bool isActive;
 
   const _ActionButton({
     required this.icon,
     required this.label,
     required this.onTap,
     required this.color,
+    this.isActive = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final surface = context.appColors.surface;
     return GestureDetector(
       onTap: onTap,
       child: Opacity(
@@ -72,16 +78,28 @@ class _ActionButton extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: isActive
+                    ? color.withValues(alpha: 0.18)
+                    : surface,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: color.withValues(alpha: 0.3),
-                  width: 1,
+                  color:
+                      color.withValues(alpha: isActive ? 0.7 : 0.3),
+                  width: isActive ? 1.5 : 1,
                 ),
+                boxShadow: isActive
+                    ? [
+                        BoxShadow(
+                          color: color.withValues(alpha: 0.3),
+                          blurRadius: 10,
+                        ),
+                      ]
+                    : null,
               ),
               child: Icon(icon, color: color, size: 24),
             ),

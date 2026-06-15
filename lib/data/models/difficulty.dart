@@ -42,6 +42,19 @@ extension DifficultyExtension on Difficulty {
     }
   }
 
+  int get maxLives {
+    switch (this) {
+      case Difficulty.easy:
+        return 5;
+      case Difficulty.medium:
+        return 4;
+      case Difficulty.hard:
+        return 3;
+      case Difficulty.impossible:
+        return 1;
+    }
+  }
+
   static Difficulty fromString(String s) {
     switch (s.toLowerCase()) {
       case 'easy':

@@ -8,20 +8,22 @@ class DifficultyScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: colors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: colors.background,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded,
-              color: AppColors.textSecondary),
+          icon: Icon(Icons.arrow_back_ios_new_rounded,
+              color: colors.textSecondary),
           onPressed: () => context.go('/'),
         ),
-        title: const Text(
+        title: Text(
           'Select Difficulty',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: colors.textPrimary,
             fontSize: 20,
             fontWeight: FontWeight.w700,
           ),
@@ -30,35 +32,36 @@ class DifficultyScreen extends StatelessWidget {
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+          padding: const EdgeInsets.symmetric(
+              horizontal: 24.0, vertical: 16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 24),
               _DifficultyButton(
                 difficulty: Difficulty.easy,
-                color: AppColors.secondaryNeon,
+                colorToken: _DifficultyColor.secondary,
                 subtitle: 'Great for beginners',
                 icon: Icons.sentiment_satisfied_alt_rounded,
               ),
               const SizedBox(height: 16),
               _DifficultyButton(
                 difficulty: Difficulty.medium,
-                color: AppColors.primaryNeon,
+                colorToken: _DifficultyColor.primary,
                 subtitle: 'A balanced challenge',
                 icon: Icons.psychology_rounded,
               ),
               const SizedBox(height: 16),
               _DifficultyButton(
                 difficulty: Difficulty.hard,
-                color: AppColors.accentPurple,
+                colorToken: _DifficultyColor.accent,
                 subtitle: 'Test your skills',
                 icon: Icons.whatshot_rounded,
               ),
               const SizedBox(height: 16),
               _DifficultyButton(
                 difficulty: Difficulty.impossible,
-                color: AppColors.errorRed,
+                colorToken: _DifficultyColor.error,
                 subtitle: 'Only for masters',
                 icon: Icons.dangerous_rounded,
               ),
@@ -70,28 +73,48 @@ class DifficultyScreen extends StatelessWidget {
   }
 }
 
+enum _DifficultyColor { primary, secondary, accent, error }
+
 class _DifficultyButton extends StatelessWidget {
   final Difficulty difficulty;
-  final Color color;
+  final _DifficultyColor colorToken;
   final String subtitle;
   final IconData icon;
 
   const _DifficultyButton({
     required this.difficulty,
-    required this.color,
+    required this.colorToken,
     required this.subtitle,
     required this.icon,
   });
 
+  Color _resolveColor(AppColorsExtension c) {
+    switch (colorToken) {
+      case _DifficultyColor.primary:
+        return c.primaryNeon;
+      case _DifficultyColor.secondary:
+        return c.secondaryNeon;
+      case _DifficultyColor.accent:
+        return c.accentPurple;
+      case _DifficultyColor.error:
+        return c.errorRed;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final color = _resolveColor(colors);
+
     return GestureDetector(
-      onTap: () => context.go('/game?difficulty=${difficulty.label}'),
+      onTap: () =>
+          context.go('/game?difficulty=${difficulty.label}'),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+        padding: const EdgeInsets.symmetric(
+            horizontal: 24.0, vertical: 20.0),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: colors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: color.withValues(alpha: 0.5),
@@ -132,8 +155,8 @@ class _DifficultyButton extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
+                    style: TextStyle(
+                      color: colors.textSecondary,
                       fontSize: 13,
                     ),
                   ),

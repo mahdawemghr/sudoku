@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sudoku/core/constants/app_constants.dart';
 import 'package:sudoku/data/models/difficulty.dart';
 import 'package:sudoku/data/models/game_record.dart';
+import 'package:sudoku/data/models/saved_game.dart';
+import 'package:sudoku/core/services/sound_service.dart';
 import 'package:sudoku/data/repositories/game_repository.dart';
 import 'package:sudoku/data/repositories/stats_repository.dart';
 import 'package:sudoku/engine/sudoku_generator.dart';
@@ -39,15 +41,19 @@ class GameController extends StateNotifier<GameState> {
   /// Called when the game ends. Arguments: won, durationSeconds, isNewBest.
   void Function(bool won, int duration, bool isNewBest)? onGameOver;
 
-  // Tracks mistakes count for saving to GameRecord.
   int _totalMistakes = 0;
+  final SoundService _sound = SoundService();
 
   GameController({
     required GameRepository gameRepository,
     required StatsRepository statsRepository,
   })  : _gameRepository = gameRepository,
         _statsRepository = statsRepository,
-        super(GameState.initial());
+        super(GameState.initial()) {
+    // Warm the database connection while the user is on the game loading screen
+    // so the first game-over DB write is instant.
+    _statsRepository.getBestTime(Difficulty.easy).ignore();
+  }
 
   // ---------------------------------------------------------------------------
   // Public API
@@ -70,9 +76,7 @@ class GameController extends StateNotifier<GameState> {
     final puzzle = result['puzzle']!;
     final solution = result['solution']!;
 
-    // currentGrid starts as a copy of puzzle.
-    final currentGrid =
-        List.generate(9, (r) => List<int>.from(puzzle[r]));
+    final currentGrid = List.generate(9, (r) => List<int>.from(puzzle[r]));
 
     state = state.copyWith(
       currentGrid: currentGrid,
@@ -82,11 +86,38 @@ class GameController extends StateNotifier<GameState> {
       phase: GamePhase.playing,
       selectedRow: -1,
       selectedCol: -1,
-      livesLeft: AppConstants.maxLives,
+      livesLeft: difficulty.maxLives,
       hintsLeft: AppConstants.maxHints,
       elapsedSeconds: 0,
       mistakeCells: {},
       undoStack: [],
+      notesMode: false,
+      notes: {},
+    );
+
+    _startTimer();
+    _persistGame(); // Save immediately so resume works even before the first move.
+  }
+
+  Future<void> resumeGame(SavedGame saved) async {
+    _stopTimer();
+    _totalMistakes = 0;
+
+    state = GameState.initial().copyWith(
+      currentGrid: List.generate(9, (r) => List<int>.from(saved.currentGrid[r])),
+      puzzle: saved.puzzle,
+      solution: saved.solution,
+      difficulty: saved.difficulty,
+      phase: GamePhase.playing,
+      selectedRow: -1,
+      selectedCol: -1,
+      livesLeft: saved.livesLeft,
+      hintsLeft: saved.hintsLeft,
+      elapsedSeconds: saved.elapsedSeconds,
+      mistakeCells: {},
+      undoStack: [],
+      notesMode: false,
+      notes: {},
     );
 
     _startTimer();
@@ -105,17 +136,31 @@ class GameController extends StateNotifier<GameState> {
 
     if (r == -1 || c == -1) return;
     if (state.isGiven(r, c)) return;
+
+    // Notes mode: toggle candidate instead of placing a number.
+    if (state.notesMode) {
+      if (state.currentGrid[r][c] != 0) return; // cell already filled
+      final key = r * 9 + c;
+      final newNotes = Map<int, Set<int>>.from(state.notes);
+      final cellNotes = Set<int>.from(newNotes[key] ?? {});
+      if (cellNotes.contains(number)) {
+        cellNotes.remove(number);
+      } else {
+        cellNotes.add(number);
+      }
+      newNotes[key] = cellNotes;
+      state = state.copyWith(notes: newNotes);
+      _persistGame();
+      return;
+    }
+
     if (state.currentGrid[r][c] == number) return;
 
     // Push current grid onto undo stack (deep copy).
     final gridSnapshot =
         List.generate(9, (row) => List<int>.from(state.currentGrid[row]));
-    final newUndoStack = [
-      ...state.undoStack,
-      gridSnapshot,
-    ];
+    final newUndoStack = [...state.undoStack, gridSnapshot];
 
-    // Apply the number.
     final newGrid =
         List.generate(9, (row) => List<int>.from(state.currentGrid[row]));
     newGrid[r][c] = number;
@@ -123,18 +168,22 @@ class GameController extends StateNotifier<GameState> {
     final flatIndex = r * 9 + c;
     final newMistakes = Set<int>.from(state.mistakeCells);
 
+    // Clear notes for this cell when a number is placed.
+    final newNotes = Map<int, Set<int>>.from(state.notes)..remove(flatIndex);
+
     if (number != state.solution[r][c]) {
-      // Wrong answer.
       newMistakes.add(flatIndex);
       _totalMistakes++;
-      final newLives = state.livesLeft - 1;
+      _sound.playWrong();
 
+      final newLives = state.livesLeft - 1;
       if (newLives <= 0) {
         _stopTimer();
         state = state.copyWith(
           currentGrid: newGrid,
           undoStack: newUndoStack,
           mistakeCells: newMistakes,
+          notes: newNotes,
           livesLeft: 0,
           phase: GamePhase.lost,
         );
@@ -144,23 +193,29 @@ class GameController extends StateNotifier<GameState> {
           currentGrid: newGrid,
           undoStack: newUndoStack,
           mistakeCells: newMistakes,
+          notes: newNotes,
           livesLeft: newLives,
         );
+        _persistGame();
       }
     } else {
-      // Correct answer.
       newMistakes.remove(flatIndex);
 
       state = state.copyWith(
         currentGrid: newGrid,
         undoStack: newUndoStack,
         mistakeCells: newMistakes,
+        notes: newNotes,
       );
 
       if (_isGridComplete(newGrid)) {
         _stopTimer();
         state = state.copyWith(phase: GamePhase.won);
+        _sound.playWin();
         _onGameOver(won: true);
+      } else {
+        _sound.playCorrect();
+        _persistGame();
       }
     }
   }
@@ -173,6 +228,17 @@ class GameController extends StateNotifier<GameState> {
 
     if (r == -1 || c == -1) return;
     if (state.isGiven(r, c)) return;
+
+    final key = r * 9 + c;
+
+    // If notes exist, clear them first.
+    if (state.notes.containsKey(key)) {
+      final newNotes = Map<int, Set<int>>.from(state.notes)..remove(key);
+      state = state.copyWith(notes: newNotes);
+      _persistGame();
+      return;
+    }
+
     if (state.currentGrid[r][c] == 0) return;
 
     final gridSnapshot =
@@ -183,14 +249,14 @@ class GameController extends StateNotifier<GameState> {
         List.generate(9, (row) => List<int>.from(state.currentGrid[row]));
     newGrid[r][c] = 0;
 
-    final newMistakes = Set<int>.from(state.mistakeCells)
-      ..remove(r * 9 + c);
+    final newMistakes = Set<int>.from(state.mistakeCells)..remove(key);
 
     state = state.copyWith(
       currentGrid: newGrid,
       undoStack: newUndoStack,
       mistakeCells: newMistakes,
     );
+    _persistGame();
   }
 
   void undo() {
@@ -200,7 +266,6 @@ class GameController extends StateNotifier<GameState> {
     final newStack = List<List<List<int>>>.from(state.undoStack);
     final previousGrid = newStack.removeLast();
 
-    // Recalculate mistake cells for the restored grid.
     final newMistakes = <int>{};
     for (int r = 0; r < 9; r++) {
       for (int c = 0; c < 9; c++) {
@@ -216,18 +281,71 @@ class GameController extends StateNotifier<GameState> {
       undoStack: newStack,
       mistakeCells: newMistakes,
     );
+    _persistGame();
+  }
+
+  void hint() {
+    if (state.phase != GamePhase.playing) return;
+    if (state.hintsLeft <= 0) return;
+
+    // Collect all empty or wrong cells.
+    final candidates = <(int, int)>[];
+    for (int r = 0; r < 9; r++) {
+      for (int c = 0; c < 9; c++) {
+        if (!state.isGiven(r, c) &&
+            state.currentGrid[r][c] != state.solution[r][c]) {
+          candidates.add((r, c));
+        }
+      }
+    }
+    if (candidates.isEmpty) return;
+
+    // Pick the selected cell if it's a candidate, otherwise pick first.
+    (int, int) target;
+    if (state.selectedRow != -1 &&
+        state.selectedCol != -1 &&
+        candidates.contains((state.selectedRow, state.selectedCol))) {
+      target = (state.selectedRow, state.selectedCol);
+    } else {
+      target = candidates.first;
+    }
+
+    final (r, c) = target;
+    final newGrid =
+        List.generate(9, (row) => List<int>.from(state.currentGrid[row]));
+    newGrid[r][c] = state.solution[r][c];
+
+    final flatIndex = r * 9 + c;
+    final newMistakes = Set<int>.from(state.mistakeCells)..remove(flatIndex);
+    final newNotes = Map<int, Set<int>>.from(state.notes)..remove(flatIndex);
+
+    state = state.copyWith(
+      currentGrid: newGrid,
+      mistakeCells: newMistakes,
+      notes: newNotes,
+      hintsLeft: state.hintsLeft - 1,
+    );
+
+    if (_isGridComplete(newGrid)) {
+      _stopTimer();
+      state = state.copyWith(phase: GamePhase.won);
+      _onGameOver(won: true);
+    } else {
+      _persistGame();
+    }
+  }
+
+  void toggleNotesMode() {
+    if (state.phase != GamePhase.playing) return;
+    state = state.copyWith(notesMode: !state.notesMode);
   }
 
   void pauseTimer() {
-    if (_timerRunning) {
-      _stopTimer();
-    }
+    if (_timerRunning) _stopTimer();
   }
 
   void resumeTimer() {
-    if (!_timerRunning && state.phase == GamePhase.playing) {
-      _startTimer();
-    }
+    if (!_timerRunning && state.phase == GamePhase.playing) _startTimer();
   }
 
   // ---------------------------------------------------------------------------
@@ -257,26 +375,49 @@ class GameController extends StateNotifier<GameState> {
     return true;
   }
 
-  Future<void> _onGameOver({required bool won}) async {
-    final duration = state.elapsedSeconds;
-    final difficulty = state.difficulty;
-
-    final record = GameRecord(
-      difficulty: difficulty,
-      durationSeconds: duration,
-      won: won,
-      mistakes: _totalMistakes,
-      completedAt: DateTime.now(),
+  void _persistGame() {
+    final saved = SavedGame(
+      currentGrid: List.generate(9, (r) => List<int>.from(state.currentGrid[r])),
+      puzzle: state.puzzle,
+      solution: state.solution,
+      difficulty: state.difficulty,
+      elapsedSeconds: state.elapsedSeconds,
+      livesLeft: state.livesLeft,
+      hintsLeft: state.hintsLeft,
     );
+    _gameRepository.saveCurrentGame(saved);
+  }
 
-    await _gameRepository.saveRecord(record);
+  Future<void> _onGameOver({required bool won}) async {
+    // Snapshot mutable values before any async gap.
+    final difficulty = state.difficulty;
+    final duration = state.elapsedSeconds;
+    final totalMistakes = _totalMistakes;
 
     bool isNewBest = false;
-    if (won) {
-      final prevBest = await _statsRepository.getBestTime(difficulty);
-      if (prevBest == null || duration < prevBest) {
-        isNewBest = true;
+    try {
+      if (won) {
+        final prevBest = await _statsRepository.getBestTime(difficulty);
+        if (prevBest == null || duration < prevBest) isNewBest = true;
       }
+    } catch (e) {
+      debugPrint('[GameController] getBestTime failed: $e');
+    }
+
+    // Save BEFORE navigating so the record persists before autoDispose fires.
+    try {
+      final record = GameRecord(
+        difficulty: difficulty,
+        durationSeconds: duration,
+        won: won,
+        mistakes: totalMistakes,
+        completedAt: DateTime.now(),
+      );
+      await _gameRepository.clearCurrentGame();
+      await _gameRepository.saveRecord(record);
+      debugPrint('[GameController] game saved — difficulty:${difficulty.label} won:$won duration:${duration}s');
+    } catch (e) {
+      debugPrint('[GameController] saveRecord failed: $e');
     }
 
     onGameOver?.call(won, duration, isNewBest);

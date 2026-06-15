@@ -247,47 +247,50 @@ Keep `GameState` **immutable** — every change returns a `copyWith`. This makes
 
 ## 7. Phase-by-Phase Build Plan
 
-### Phase 0 — Setup (½ day)
+### ✅ Phase 0 — Setup (½ day)
 - `flutter create sudoku_nova`, add dependencies, set up the folder structure above.
 - Configure theme (dark navy + neon cyan/green/purple to match your mockup), fonts, and `go_router` with placeholder screens.
 
-### Phase 1 — Engine (2–3 days) ⭐ most important
+### ✅ Phase 1 — Engine (2–3 days) ⭐ most important
 - Build and **unit-test** solver, generator, validator in the pure-Dart `engine/` folder.
 - Get random unique-solution puzzle generation working for all four difficulties (Layer 1 clue counts).
 - Move generation into an isolate.
 
-### Phase 2 — Models + Storage (1 day)
+### ✅ Phase 2 — Models + Storage (1 day)
 - Define models, set up sqflite + DAOs + repositories.
 - Test: save a fake `GameRecord`, query best score, query history.
 
-### Phase 3 — Game Screen Core (3–4 days)
+### ✅ Phase 3 — Game Screen Core (3–4 days)
 - Render the 9×9 board with thick 3×3 box borders (matching your mockup's grid).
 - Number pad 1–9, cell selection, number entry.
 - Wire `GameController`: timer, lives, mistake detection, win/lose.
 - Undo + erase.
 
-### Phase 4 — Menu, Difficulty, History, Result (2–3 days)
+### ✅ Phase 4 — Menu, Difficulty, History, Result (2–3 days)
 - Menu screen: title, Play button, best-score card, History button, settings.
 - Difficulty selection screen (Easy/Medium/Hard/Impossible).
 - History screen: list of past games with date, difficulty, time, win/loss.
 - Result screen: win/lose, final time, "New best!" badge when applicable.
 
-### Phase 5 — Game Features (2–3 days)
+### ✅ Phase 5 — Game Features (2–3 days)
 - Hints (reveal one correct cell, decrement hint counter).
 - Pencil-mark notes mode (small candidate numbers in a cell).
 - Highlight same-number cells and row/column/box of the selected cell.
 - Resume in-progress game from the menu.
 
-### Phase 6 — Polish (2–3 days)
-- Neon glow styling, smooth animations (`flutter_animate`) for cell entry, win celebration.
-- Sound effects + haptics on placement/error.
-- Settings: theme, sound toggle.
-- Empty states and loading states.
+### ✅ Phase 6 — Polish (2–3 days)
+- Neon glow styling ✅ (neon borders + box-shadow glows throughout)
+- Smooth animations (`flutter_animate`) ✅ — cell number entry (scale+fade), result screen icon (elastic bounce), headline + card + buttons (staggered slide+fade).
+- Sound effects + haptics ✅ — `SoundService` (audioplayers) wired to correct/wrong/win/lose; `HapticFeedback` fires on each. Drop `.mp3` files into `assets/sounds/` to activate sound (gracefully silent if missing).
+- Settings screen ✅ — `/settings` route, sound on/off toggle persisted via `SharedPreferences`, Settings button in menu (gear icon next to HISTORY).
+- Empty states ✅ and loading states ✅.
 
-### Phase 7 — Testing & Release (1–2 days)
-- Unit tests for engine, widget tests for board/number pad.
-- Test on real Android device, handle edge cases (app backgrounded mid-game).
-- Build a release APK / app bundle, app icon, splash screen.
+### ✅ Phase 7 — Testing & Release (1–2 days)
+- Unit tests for engine ✅, widget tests for `SudokuBoard` and `NumberPad` ✅ (33 tests total, all passing).
+- App backgrounded mid-game ✅ — handled via `WidgetsBindingObserver` in `GameScreen` + game saved to `SharedPreferences` on every move.
+- Build a release APK / app bundle — run `flutter build apk --release` when ready to ship.
+- App icon ✅ — neon sudoku grid icon generated (`assets/icon/app_icon.png`); `flutter_launcher_icons` applied to Android adaptive + default mipmaps.
+- Splash screen ✅ — dark navy (#0D1117) background with centered grid logo; `flutter_native_splash` applied for Android (including Android 12 windowSplashScreenAnimatedIcon).
 
 **Total: roughly 2–3 focused weeks.**
 

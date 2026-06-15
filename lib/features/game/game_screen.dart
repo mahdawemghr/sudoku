@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sudoku/core/theme/app_colors.dart';
 import 'package:sudoku/data/models/difficulty.dart';
+import 'package:sudoku/data/repositories/game_repository.dart';
 import 'package:sudoku/features/game/controller/game_controller.dart';
 import 'package:sudoku/features/game/state/game_state.dart';
 import 'package:sudoku/features/game/widgets/action_buttons.dart';
@@ -12,8 +13,9 @@ import 'package:sudoku/features/game/widgets/sudoku_board.dart';
 
 class GameScreen extends ConsumerStatefulWidget {
   final String? difficulty;
+  final bool resume;
 
-  const GameScreen({super.key, this.difficulty});
+  const GameScreen({super.key, this.difficulty, this.resume = false});
 
   @override
   ConsumerState<GameScreen> createState() => _GameScreenState();
@@ -32,8 +34,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
         ? DifficultyExtension.fromString(widget.difficulty!)
         : Difficulty.easy;
 
-    // Defer start to after the first frame so context is valid.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       final controller = ref.read(gameControllerProvider.notifier);
 
       controller.onGameOver = (won, duration, isNewBest) {
@@ -47,7 +48,17 @@ class _GameScreenState extends ConsumerState<GameScreen>
         );
       };
 
-      controller.startNewGame(_difficulty);
+      if (widget.resume) {
+        final saved = await GameRepository().loadCurrentGame();
+        if (saved != null) {
+          await controller.resumeGame(saved);
+        } else {
+          // Saved game disappeared — start fresh instead.
+          await controller.startNewGame(_difficulty);
+        }
+      } else {
+        await controller.startNewGame(_difficulty);
+      }
     });
   }
 
@@ -68,36 +79,48 @@ class _GameScreenState extends ConsumerState<GameScreen>
     super.dispose();
   }
 
+  void _exitToHome() {
+    final controller = ref.read(gameControllerProvider.notifier);
+    controller.pauseTimer();
+    // Game is already saved on every move (and on startNewGame).
+    // Just navigate — the saved state stays in SharedPreferences.
+    context.go('/');
+  }
+
   @override
   Widget build(BuildContext context) {
     final gameState = ref.watch(gameControllerProvider);
+    final colors = context.appColors;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded,
-              color: AppColors.textSecondary),
-          onPressed: () {
-            ref.read(gameControllerProvider.notifier).pauseTimer();
-            context.go('/');
-          },
-        ),
-        title: Text(
-          _difficulty.displayName,
-          style: const TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _exitToHome();
+      },
+      child: Scaffold(
+        backgroundColor: colors.background,
+        appBar: AppBar(
+          backgroundColor: colors.background,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back_ios_new_rounded,
+                color: colors.textSecondary),
+            onPressed: _exitToHome,
           ),
+          title: Text(
+            gameState.isLoading ? '' : gameState.difficulty.displayName,
+            style: TextStyle(
+              color: colors.textPrimary,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          centerTitle: true,
         ),
-        centerTitle: true,
+        body: gameState.isLoading
+            ? const _LoadingView()
+            : _GameView(phase: gameState.phase),
       ),
-      body: gameState.isLoading
-          ? const _LoadingView()
-          : _GameView(phase: gameState.phase),
     );
   }
 }
@@ -107,19 +130,20 @@ class _LoadingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    final colors = context.appColors;
+    return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           CircularProgressIndicator(
-            color: AppColors.primaryNeon,
+            color: colors.primaryNeon,
             strokeWidth: 2,
           ),
-          SizedBox(height: 16),
+          const SizedBox(height: 16),
           Text(
             'Generating puzzle…',
             style: TextStyle(
-              color: AppColors.textSecondary,
+              color: colors.textSecondary,
               fontSize: 14,
             ),
           ),
@@ -136,20 +160,20 @@ class _GameView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
+    return const SafeArea(
       child: Column(
         children: [
-          const GameHud(),
-          const SizedBox(height: 8),
+          GameHud(),
+          SizedBox(height: 8),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: const SudokuBoard(),
+            padding: EdgeInsets.symmetric(horizontal: 8.0),
+            child: SudokuBoard(),
           ),
-          const SizedBox(height: 16),
-          const ActionButtons(),
-          const SizedBox(height: 20),
-          const NumberPad(),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
+          ActionButtons(),
+          SizedBox(height: 20),
+          NumberPad(),
+          SizedBox(height: 16),
         ],
       ),
     );

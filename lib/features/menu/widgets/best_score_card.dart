@@ -13,29 +13,31 @@ class BestScoreCard extends StatelessWidget {
     required this.bestTime,
   });
 
-  Color get _difficultyColor {
+  Color _difficultyColor(AppColorsExtension colors) {
     switch (difficulty) {
       case Difficulty.easy:
-        return AppColors.secondaryNeon;
+        return colors.secondaryNeon;
       case Difficulty.medium:
-        return AppColors.primaryNeon;
+        return colors.primaryNeon;
       case Difficulty.hard:
-        return AppColors.accentPurple;
+        return colors.accentPurple;
       case Difficulty.impossible:
-        return AppColors.errorRed;
+        return colors.errorRed;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final color = _difficultyColor;
+    final colors = context.appColors;
+    final color = _difficultyColor(colors);
     final timeLabel =
         bestTime != null ? DurationFormatter.format(bestTime!) : '--:--';
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding:
+          const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: colors.surface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: color.withValues(alpha: 0.35),
@@ -58,8 +60,8 @@ class BestScoreCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             timeLabel,
-            style: const TextStyle(
-              color: AppColors.textPrimary,
+            style: TextStyle(
+              color: colors.textPrimary,
               fontSize: 18,
               fontWeight: FontWeight.w700,
               fontFamily: 'monospace',

@@ -37,21 +37,22 @@ class _NumberButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: 36,
         height: 48,
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: colors.surface,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: AppColors.primaryNeon.withValues(alpha: 0.3),
+            color: colors.primaryNeon.withValues(alpha: 0.3),
             width: 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: AppColors.primaryNeon.withValues(alpha: 0.08),
+              color: colors.primaryNeon.withValues(alpha: 0.08),
               blurRadius: 4,
               offset: const Offset(0, 2),
             ),
@@ -60,8 +61,8 @@ class _NumberButton extends StatelessWidget {
         child: Center(
           child: Text(
             '$number',
-            style: const TextStyle(
-              color: AppColors.primaryNeon,
+            style: TextStyle(
+              color: colors.primaryNeon,
               fontSize: 20,
               fontWeight: FontWeight.bold,
             ),

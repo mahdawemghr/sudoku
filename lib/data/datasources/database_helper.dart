@@ -12,9 +12,12 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   Database? _database;
+  Future<Database>? _initFuture;
 
   Future<Database> get database async {
-    _database ??= await _initDatabase();
+    if (_database != null) return _database!;
+    _initFuture ??= _initDatabase();
+    _database = await _initFuture!;
     return _database!;
   }
 

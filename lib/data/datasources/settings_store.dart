@@ -5,6 +5,7 @@ import '../models/saved_game.dart';
 class SettingsStore {
   static const _keySound = 'sound_enabled';
   static const _keySavedGame = 'saved_game_json';
+  static const _keyThemeMode = 'theme_mode';
 
   Future<SharedPreferences> get _prefs => SharedPreferences.getInstance();
 
@@ -16,6 +17,17 @@ class SettingsStore {
   Future<void> setSoundEnabled(bool value) async {
     final prefs = await _prefs;
     await prefs.setBool(_keySound, value);
+  }
+
+  // 'system' | 'light' | 'dark'
+  Future<String> getThemeMode() async {
+    final prefs = await _prefs;
+    return prefs.getString(_keyThemeMode) ?? 'system';
+  }
+
+  Future<void> setThemeMode(String value) async {
+    final prefs = await _prefs;
+    await prefs.setString(_keyThemeMode, value);
   }
 
   Future<SavedGame?> getSavedGame() async {

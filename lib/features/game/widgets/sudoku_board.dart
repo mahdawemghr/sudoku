@@ -11,6 +11,7 @@ class SudokuBoard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final gameState = ref.watch(gameControllerProvider);
     final controller = ref.read(gameControllerProvider.notifier);
+    final colors = context.appColors;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -21,7 +22,10 @@ class SudokuBoard extends ConsumerWidget {
           width: size,
           height: size,
           child: CustomPaint(
-            painter: _BoardGridPainter(),
+            painter: _BoardGridPainter(
+              borderColor: colors.border,
+              primaryNeon: colors.primaryNeon,
+            ),
             child: Column(
               children: List.generate(9, (row) {
                 return SizedBox(
@@ -37,6 +41,9 @@ class SudokuBoard extends ConsumerWidget {
                           isSelected: gameState.isSelected(row, col),
                           isMistake: gameState.isMistake(row, col),
                           isCorrect: gameState.isCorrect(row, col),
+                          isHighlighted: gameState.isHighlighted(row, col),
+                          isSameNumber: gameState.isSameNumber(row, col),
+                          notes: gameState.notesFor(row, col),
                           onTap: () => controller.selectCell(row, col),
                         ),
                       );
@@ -53,26 +60,33 @@ class SudokuBoard extends ConsumerWidget {
 }
 
 class _BoardGridPainter extends CustomPainter {
+  final Color borderColor;
+  final Color primaryNeon;
+
+  const _BoardGridPainter({
+    required this.borderColor,
+    required this.primaryNeon,
+  });
+
   @override
   void paint(Canvas canvas, Size size) {
     final cellSize = size.width / 9;
 
     final thinPaint = Paint()
-      ..color = AppColors.border.withValues(alpha: 0.5)
+      ..color = borderColor.withValues(alpha: 0.5)
       ..strokeWidth = 0.5;
 
     final thickPaint = Paint()
-      ..color = AppColors.primaryNeon.withValues(alpha: 0.4)
+      ..color = primaryNeon.withValues(alpha: 0.4)
       ..strokeWidth = 2.0;
 
     final outerPaint = Paint()
-      ..color = AppColors.primaryNeon.withValues(alpha: 0.6)
+      ..color = primaryNeon.withValues(alpha: 0.6)
       ..strokeWidth = 2.5
       ..style = PaintingStyle.stroke;
 
-    // Draw thin lines between individual cells.
     for (int i = 1; i < 9; i++) {
-      if (i % 3 == 0) continue; // box borders drawn separately
+      if (i % 3 == 0) continue;
       final x = i * cellSize;
       final y = i * cellSize;
 
@@ -80,7 +94,6 @@ class _BoardGridPainter extends CustomPainter {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), thinPaint);
     }
 
-    // Draw thick lines between 3x3 boxes.
     for (int i = 3; i < 9; i += 3) {
       final x = i * cellSize;
       final y = i * cellSize;
@@ -89,7 +102,6 @@ class _BoardGridPainter extends CustomPainter {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), thickPaint);
     }
 
-    // Draw outer border.
     canvas.drawRect(
       Rect.fromLTWH(1, 1, size.width - 2, size.height - 2),
       outerPaint,
@@ -97,5 +109,6 @@ class _BoardGridPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(_BoardGridPainter old) =>
+      old.borderColor != borderColor || old.primaryNeon != primaryNeon;
 }

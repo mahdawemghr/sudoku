@@ -5,6 +5,7 @@ import '../../features/game/game_screen.dart';
 import '../../features/history/history_screen.dart';
 import '../../features/menu/menu_screen.dart';
 import '../../features/result/result_screen.dart';
+import '../../features/settings/settings_screen.dart';
 
 class AppRoutes {
   AppRoutes._();
@@ -14,6 +15,7 @@ class AppRoutes {
   static const String game = '/game';
   static const String history = '/history';
   static const String result = '/result';
+  static const String settings = '/settings';
 }
 
 final GoRouter appRouter = GoRouter(
@@ -31,12 +33,17 @@ final GoRouter appRouter = GoRouter(
       path: AppRoutes.game,
       builder: (context, state) {
         final difficulty = state.uri.queryParameters['difficulty'];
-        return GameScreen(difficulty: difficulty);
+        final resume = state.uri.queryParameters['resume'] == 'true';
+        return GameScreen(difficulty: difficulty, resume: resume);
       },
     ),
     GoRoute(
       path: AppRoutes.history,
       builder: (context, state) => const HistoryScreen(),
+    ),
+    GoRoute(
+      path: AppRoutes.settings,
+      builder: (context, state) => const SettingsScreen(),
     ),
     GoRoute(
       path: AppRoutes.result,
