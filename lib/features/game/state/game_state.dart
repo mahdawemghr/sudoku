@@ -117,9 +117,18 @@ class GameState {
   bool isSameNumber(int row, int col) {
     if (selectedRow == -1 || selectedCol == -1) return false;
     if (isSelected(row, col)) return false;
-    final selectedValue = currentGrid[selectedRow][selectedCol];
-    if (selectedValue == 0) return false;
-    return currentGrid[row][col] == selectedValue;
+    final value = selectedValue;
+    if (value == null) return false;
+    return currentGrid[row][col] == value;
+  }
+
+  /// The number currently entered in the selected cell, or null if no cell
+  /// is selected or the selected cell is empty. Used to highlight matching
+  /// notes elsewhere on the board.
+  int? get selectedValue {
+    if (selectedRow == -1 || selectedCol == -1) return null;
+    final value = currentGrid[selectedRow][selectedCol];
+    return value == 0 ? null : value;
   }
 
   Set<int> notesFor(int row, int col) {

@@ -9,8 +9,9 @@ import 'package:sudoku/data/repositories/game_repository.dart';
 import 'package:sudoku/data/repositories/stats_repository.dart';
 import 'package:sudoku/features/menu/widgets/best_score_card.dart';
 
-final bestTimesProvider =
-    FutureProvider.autoDispose<Map<Difficulty, int?>>((ref) async {
+final bestTimesProvider = FutureProvider.autoDispose<Map<Difficulty, int?>>((
+  ref,
+) async {
   return StatsRepository().getAllBestTimes();
 });
 
@@ -39,51 +40,66 @@ class MenuScreen extends ConsumerWidget {
 
               // Title
               ShaderMask(
-                shaderCallback: (bounds) => LinearGradient(
-                  colors: [colors.primaryNeon, colors.accentPurple],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ).createShader(bounds),
-                child: const Text(
-                  'SUDOKU NOVA',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 40,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 4,
-                  ),
-                ),
-              )
+                    shaderCallback: (bounds) => LinearGradient(
+                      colors: [colors.primaryNeon, colors.accentPurple],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ).createShader(bounds),
+                    child: const Text(
+                      'SUDOKU',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 40,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 4,
+                      ),
+                    ),
+                  )
                   .animate()
                   .fadeIn(duration: 400.ms, curve: Curves.easeOut)
-                  .slideY(begin: -0.25, end: 0, duration: 400.ms, curve: Curves.easeOut),
+                  .slideY(
+                    begin: -0.25,
+                    end: 0,
+                    duration: 400.ms,
+                    curve: Curves.easeOut,
+                  ),
 
               const SizedBox(height: 8),
 
               Text(
-                'Challenge your mind',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: colors.textSecondary,
-                  fontSize: 14,
-                  letterSpacing: 1.5,
-                ),
-              )
+                    'Challenge your mind',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: colors.textSecondary,
+                      fontSize: 14,
+                      letterSpacing: 1.5,
+                    ),
+                  )
                   .animate(delay: 100.ms)
                   .fadeIn(duration: 350.ms)
-                  .slideY(begin: 0.2, end: 0, duration: 350.ms, curve: Curves.easeOut),
+                  .slideY(
+                    begin: 0.2,
+                    end: 0,
+                    duration: 350.ms,
+                    curve: Curves.easeOut,
+                  ),
 
               const SizedBox(height: 44),
 
               _NeonButton(
-                label: 'PLAY',
-                color: colors.primaryNeon,
-                onTap: () => context.push('/difficulty'),
-              )
+                    label: 'PLAY',
+                    color: colors.primaryNeon,
+                    onTap: () => context.push('/difficulty'),
+                  )
                   .animate(delay: 200.ms)
                   .fadeIn(duration: 300.ms)
-                  .slideY(begin: 0.25, end: 0, duration: 300.ms, curve: Curves.easeOut),
+                  .slideY(
+                    begin: 0.25,
+                    end: 0,
+                    duration: 300.ms,
+                    curve: Curves.easeOut,
+                  ),
 
               savedGameAsync.when(
                 loading: () => const SizedBox.shrink(),
@@ -92,14 +108,21 @@ class MenuScreen extends ConsumerWidget {
                   if (saved == null) return const SizedBox.shrink();
                   return Padding(
                     padding: const EdgeInsets.only(top: 14.0),
-                    child: _NeonButton(
-                      label: 'RESUME  ${saved.difficulty.displayName.toUpperCase()}',
-                      color: colors.secondaryNeon,
-                      onTap: () => context.go('/game?resume=true'),
-                    )
-                        .animate(delay: 280.ms)
-                        .fadeIn(duration: 300.ms)
-                        .slideY(begin: 0.25, end: 0, duration: 300.ms, curve: Curves.easeOut),
+                    child:
+                        _NeonButton(
+                              label:
+                                  'RESUME  ${saved.difficulty.displayName.toUpperCase()}',
+                              color: colors.secondaryNeon,
+                              onTap: () => context.go('/game?resume=true'),
+                            )
+                            .animate(delay: 280.ms)
+                            .fadeIn(duration: 300.ms)
+                            .slideY(
+                              begin: 0.25,
+                              end: 0,
+                              duration: 300.ms,
+                              curve: Curves.easeOut,
+                            ),
                   );
                 },
               ),
@@ -125,9 +148,7 @@ class MenuScreen extends ConsumerWidget {
                     ),
                   ),
                 ],
-              )
-                  .animate(delay: 340.ms)
-                  .fadeIn(duration: 300.ms),
+              ).animate(delay: 340.ms).fadeIn(duration: 300.ms),
 
               const SizedBox(height: 14),
 
@@ -152,10 +173,7 @@ class MenuScreen extends ConsumerWidget {
                   childAspectRatio: 2.4,
                   children: Difficulty.values.indexed.map((entry) {
                     final (i, d) = entry;
-                    return BestScoreCard(
-                      difficulty: d,
-                      bestTime: bestTimes[d],
-                    )
+                    return BestScoreCard(difficulty: d, bestTime: bestTimes[d])
                         .animate(delay: (380 + i * 60).ms)
                         .fadeIn(duration: 280.ms)
                         .scale(
@@ -171,25 +189,30 @@ class MenuScreen extends ConsumerWidget {
               const Spacer(),
 
               Row(
-                children: [
-                  Expanded(
-                    child: _NeonButton(
-                      label: 'HISTORY',
-                      color: colors.accentPurple,
-                      onTap: () => context.push('/history'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  _IconNeonButton(
-                    icon: Icons.settings_rounded,
-                    color: colors.textSecondary,
-                    onTap: () => context.push('/settings'),
-                  ),
-                ],
-              )
+                    children: [
+                      Expanded(
+                        child: _NeonButton(
+                          label: 'HISTORY',
+                          color: colors.accentPurple,
+                          onTap: () => context.push('/history'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      _IconNeonButton(
+                        icon: Icons.settings_rounded,
+                        color: colors.textSecondary,
+                        onTap: () => context.push('/settings'),
+                      ),
+                    ],
+                  )
                   .animate(delay: 500.ms)
                   .fadeIn(duration: 300.ms)
-                  .slideY(begin: 0.2, end: 0, duration: 300.ms, curve: Curves.easeOut),
+                  .slideY(
+                    begin: 0.2,
+                    end: 0,
+                    duration: 300.ms,
+                    curve: Curves.easeOut,
+                  ),
 
               const SizedBox(height: 32),
             ],

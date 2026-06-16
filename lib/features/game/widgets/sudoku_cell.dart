@@ -11,6 +11,7 @@ class SudokuCell extends StatefulWidget {
   final bool isHighlighted;
   final bool isSameNumber;
   final Set<int> notes;
+  final int? highlightedNote;
   final int? celebrationStep;
   final VoidCallback onTap;
 
@@ -25,6 +26,7 @@ class SudokuCell extends StatefulWidget {
     required this.isSameNumber,
     required this.notes,
     required this.onTap,
+    this.highlightedNote,
     this.celebrationStep,
   });
 
@@ -126,8 +128,8 @@ class _SudokuCellState extends State<SudokuCell>
     // so 9% is invisible. Dark mode uses bright cyan (#00F5FF) where even 9% pops.
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final selectedAlpha   = isDark ? 0.22 : 0.42;
-    final sameNumAlpha    = isDark ? 0.12 : 0.26;
-    final highlightAlpha  = isDark ? 0.09 : 0.18;
+    final sameNumAlpha    = isDark ? 0.08 : 0.26;
+    final highlightAlpha  = isDark ? 0.03 : 0.18;
     final mistakeAlpha    = isDark ? 0.20 : 0.18;
 
     // Background priority: mistake > selected > sameNumber > highlight > given > default
@@ -172,6 +174,9 @@ class _SudokuCellState extends State<SudokuCell>
       child: Container(
         decoration: BoxDecoration(
           color: bg,
+          border: widget.isSelected
+              ? Border.all(color: colors.primaryNeon, width: 2.0)
+              : null,
           boxShadow: widget.isSelected
               ? [
                   BoxShadow(
@@ -203,7 +208,11 @@ class _SudokuCellState extends State<SudokuCell>
                   )
                   .fadeIn(duration: 80.ms)
               : widget.notes.isNotEmpty
-                  ? _NotesGrid(notes: widget.notes, colors: colors)
+                  ? _NotesGrid(
+                      notes: widget.notes,
+                      colors: colors,
+                      highlightedNote: widget.highlightedNote,
+                    )
                   : null,
         ),
       ),
@@ -274,37 +283,57 @@ class _SudokuCellState extends State<SudokuCell>
 class _NotesGrid extends StatelessWidget {
   final Set<int> notes;
   final AppColorsExtension colors;
+  final int? highlightedNote;
 
-  const _NotesGrid({required this.notes, required this.colors});
+  const _NotesGrid({
+    required this.notes,
+    required this.colors,
+    this.highlightedNote,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(1.0),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _noteRow([1, 2, 3]),
-          _noteRow([4, 5, 6]),
-          _noteRow([7, 8, 9]),
-        ],
+      padding: const EdgeInsets.all(0.5),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Scale notes to the cell's actual rendered size (measured inside
+          // the padding above) instead of a fixed pixel guess, so they stay
+          // legible across phone/tablet screen sizes without overflowing.
+          final slotWidth = constraints.maxWidth / 3;
+          final fontSize = (slotWidth * 0.68).clamp(8.0, 18.0);
+
+          return Column(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _noteRow([1, 2, 3], slotWidth, fontSize),
+              _noteRow([4, 5, 6], slotWidth, fontSize),
+              _noteRow([7, 8, 9], slotWidth, fontSize),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Widget _noteRow(List<int> nums) {
+  Widget _noteRow(List<int> nums, double slotWidth, double fontSize) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: nums.map((n) {
+        if (!notes.contains(n)) return SizedBox(width: slotWidth);
+        final isHighlighted = n == highlightedNote;
         return SizedBox(
-          width: 10,
-          child: Text(
-            notes.contains(n) ? '$n' : '',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: colors.accentPurple,
-              fontSize: 7,
-              fontWeight: FontWeight.w700,
+          width: slotWidth,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              '$n',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: isHighlighted ? colors.primaryNeon : colors.accentPurple,
+                fontSize: isHighlighted ? fontSize * 1.15 : fontSize,
+                fontWeight: isHighlighted ? FontWeight.w900 : FontWeight.w700,
+              ),
             ),
           ),
         );

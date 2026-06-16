@@ -10,6 +10,8 @@ class SavedGame {
   final int elapsedSeconds;
   final int livesLeft;
   final int hintsLeft;
+  // key: row*9+col, value: set of candidate numbers
+  final Map<int, Set<int>> notes;
 
   const SavedGame({
     required this.currentGrid,
@@ -19,6 +21,7 @@ class SavedGame {
     required this.elapsedSeconds,
     required this.livesLeft,
     required this.hintsLeft,
+    this.notes = const {},
   });
 
   Map<String, dynamic> toJson() {
@@ -30,6 +33,7 @@ class SavedGame {
       'elapsedSeconds': elapsedSeconds,
       'livesLeft': livesLeft,
       'hintsLeft': hintsLeft,
+      'notes': notes.map((k, v) => MapEntry(k.toString(), v.toList())),
     };
   }
 
@@ -40,6 +44,8 @@ class SavedGame {
           .toList();
     }
 
+    final rawNotes = json['notes'] as Map<String, dynamic>?;
+
     return SavedGame(
       currentGrid: parseGrid(json['currentGrid']),
       puzzle: parseGrid(json['puzzle']),
@@ -49,6 +55,10 @@ class SavedGame {
       elapsedSeconds: json['elapsedSeconds'] as int,
       livesLeft: json['livesLeft'] as int,
       hintsLeft: json['hintsLeft'] as int,
+      notes: rawNotes == null
+          ? const {}
+          : rawNotes.map((k, v) =>
+              MapEntry(int.parse(k), (v as List).map((e) => e as int).toSet())),
     );
   }
 

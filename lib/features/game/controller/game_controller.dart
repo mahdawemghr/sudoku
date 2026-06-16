@@ -117,7 +117,7 @@ class GameController extends StateNotifier<GameState> {
       mistakeCells: {},
       undoStack: [],
       notesMode: false,
-      notes: {},
+      notes: saved.notes,
     );
 
     _startTimer();
@@ -205,6 +205,28 @@ class GameController extends StateNotifier<GameState> {
       }
     } else {
       newMistakes.remove(flatIndex);
+
+      // The number is confirmed correct, so it can no longer be a candidate
+      // anywhere in the same row, column, or 3×3 box — clear it there too.
+      for (int rr = 0; rr < 9; rr++) {
+        for (int cc = 0; cc < 9; cc++) {
+          final peerKey = rr * 9 + cc;
+          if (peerKey == flatIndex) continue;
+          final sameRow = rr == r;
+          final sameCol = cc == c;
+          final sameBox = (rr ~/ 3) == (r ~/ 3) && (cc ~/ 3) == (c ~/ 3);
+          if (!sameRow && !sameCol && !sameBox) continue;
+
+          final peerNotes = newNotes[peerKey];
+          if (peerNotes == null || !peerNotes.contains(number)) continue;
+          final updated = Set<int>.from(peerNotes)..remove(number);
+          if (updated.isEmpty) {
+            newNotes.remove(peerKey);
+          } else {
+            newNotes[peerKey] = updated;
+          }
+        }
+      }
 
       state = state.copyWith(
         currentGrid: newGrid,
@@ -394,6 +416,7 @@ class GameController extends StateNotifier<GameState> {
       elapsedSeconds: state.elapsedSeconds,
       livesLeft: state.livesLeft,
       hintsLeft: state.hintsLeft,
+      notes: state.notes,
     );
     _gameRepository.saveCurrentGame(saved);
   }

@@ -91,7 +91,10 @@ class _SudokuBoardState extends ConsumerState<SudokuBoard> {
           width: size,
           height: size,
           child: CustomPaint(
-            painter: _BoardGridPainter(
+            // Drawn as a foreground painter so the grid lines sit on top of
+            // each cell's (often fully opaque) background instead of being
+            // covered by it.
+            foregroundPainter: _BoardGridPainter(
               borderColor: colors.border,
               primaryNeon: colors.primaryNeon,
             ),
@@ -115,6 +118,7 @@ class _SudokuBoardState extends ConsumerState<SudokuBoard> {
                           isHighlighted: gameState.isHighlighted(row, col),
                           isSameNumber: gameState.isSameNumber(row, col),
                           notes: gameState.notesFor(row, col),
+                          highlightedNote: gameState.selectedValue,
                           celebrationStep: _celebratingCells[cellIdx],
                           onTap: () => controller.selectCell(row, col),
                         ),
@@ -145,16 +149,16 @@ class _BoardGridPainter extends CustomPainter {
     final cellSize = size.width / 9;
 
     final thinPaint = Paint()
-      ..color = borderColor.withValues(alpha: 0.75)
-      ..strokeWidth = 0.7;
+      ..color = borderColor.withValues(alpha: 0.55)
+      ..strokeWidth = 0.6;
 
     final thickPaint = Paint()
-      ..color = primaryNeon.withValues(alpha: 0.6)
-      ..strokeWidth = 2.0;
+      ..color = primaryNeon.withValues(alpha: 0.9)
+      ..strokeWidth = 2.5;
 
     final outerPaint = Paint()
-      ..color = primaryNeon.withValues(alpha: 0.85)
-      ..strokeWidth = 2.5
+      ..color = primaryNeon.withValues(alpha: 0.95)
+      ..strokeWidth = 3.0
       ..style = PaintingStyle.stroke;
 
     for (int i = 1; i < 9; i++) {
