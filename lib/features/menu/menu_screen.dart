@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sudoku/core/services/sound_service.dart';
 import 'package:sudoku/core/theme/app_colors.dart';
 import 'package:sudoku/data/models/difficulty.dart';
 import 'package:sudoku/data/models/saved_game.dart';
@@ -247,6 +248,7 @@ class _NeonButtonState extends State<_NeonButton> {
       onTapDown: (_) => setState(() => _pressed = true),
       onTapUp: (_) {
         setState(() => _pressed = false);
+        SoundService().playTap();
         widget.onTap();
       },
       onTapCancel: () => setState(() => _pressed = false),
@@ -313,6 +315,7 @@ class _IconNeonButtonState extends State<_IconNeonButton> {
       onTapDown: (_) => setState(() => _pressed = true),
       onTapUp: (_) {
         setState(() => _pressed = false);
+        SoundService().playTap();
         widget.onTap();
       },
       onTapCancel: () => setState(() => _pressed = false),

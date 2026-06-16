@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sudoku/core/services/sound_service.dart';
 import 'package:sudoku/core/theme/app_colors.dart';
 import 'package:sudoku/data/datasources/settings_store.dart';
 
@@ -110,7 +111,10 @@ class SettingsScreen extends ConsumerWidget {
             Icons.arrow_back_ios_new_rounded,
             color: colors.textSecondary,
           ),
-          onPressed: () => context.pop(),
+          onPressed: () {
+            SoundService().playTap();
+            context.pop();
+          },
         ),
         title: Text(
           'Settings',
@@ -312,7 +316,10 @@ class _ThemeSegment extends StatelessWidget {
 
     return Expanded(
       child: GestureDetector(
-        onTap: onTap,
+        onTap: () {
+          SoundService().playTap();
+          onTap();
+        },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(vertical: 10),

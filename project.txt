@@ -3,7 +3,8 @@
 ================================================================================
 
   A neon-styled, local-only Sudoku puzzle game built with Flutter and Dart.
-  No backend. All data lives on the device.
+  No backend. All data lives on the device. All sound is synthesized at
+  runtime — no audio asset files are bundled.
 
 ================================================================================
   OVERVIEW
@@ -11,9 +12,10 @@
 
 Sudoku Nova is a fully offline Sudoku game for Android (and Linux desktop for
 development). The UI uses a cyberpunk neon aesthetic — dark backgrounds with
-cyan, green, and purple glows — and includes smooth animations, sound effects,
-and a complete game lifecycle: menu → difficulty selection → gameplay →
-result screen → history tracking.
+cyan, green, and purple glows (plus a full light theme) — and includes smooth
+animations, a from-scratch synthesized sound system, hints that explain their
+own reasoning, and a complete game lifecycle: menu → difficulty selection →
+gameplay → result screen → history tracking.
 
 Target platform  : Android (primary), Linux desktop (development)
 Flutter version  : 3.41.8 / Dart 3.11.5
@@ -21,14 +23,16 @@ State management : Riverpod (StateNotifier + FutureProvider)
 Navigation       : go_router (declarative, URI-based)
 Local database   : sqflite (SQLite) — game history and best times
 Lightweight store: shared_preferences — in-progress game, settings
-Sound            : audioplayers — correct/wrong/win/lose effects
+Sound            : audioplayers (BytesSource) playing tones synthesized in
+                   pure Dart at runtime — no .mp3/.wav assets bundled
 
 ================================================================================
   ARCHITECTURE — FOUR LAYERS
 ================================================================================
 
   engine/    Pure Dart, zero Flutter imports. Sudoku logic (solver, generator,
-             validator, difficulty rater). Fully unit-testable in isolation.
+             validator, difficulty rater, hint explainer). Fully unit-testable
+             in isolation.
 
   data/      Models, DAOs, repositories. sqflite + shared_preferences. No UI.
 
@@ -40,7 +44,7 @@ Sound            : audioplayers — correct/wrong/win/lose effects
   ENGINE LAYER  (lib/engine/)
 ================================================================================
 
-Constraint: no Flutter imports. Runs on background isolates.
+Constraint: no Flutter imports. Generator runs on a background isolate.
 
 sudoku_solver.dart
   - SudokuSolver.solve(grid)                 Recursive backtracking solver
@@ -68,6 +72,28 @@ difficulty_rater.dart
   - rateByClues(puzzle)                     easy≥40, medium≥32, hard≥27, else impossible
   - targetRemovalCount(difficulty)          Cells to remove: 38/45/52/57
 
+hint_explainer.dart
+  - HintStrategy enum                       nakedSingle / hiddenSingleBox /
+                                            hiddenSingleRow / hiddenSingleColumn /
+                                            logicalDeduction
+  - HintExplanation                         {strategy, title, reason} — plain-
+                                            language strings, no Sudoku jargon
+  - HintExplainer.explain(currentGrid, solution, row, col)
+      1. Builds a "clean" grid: any cell that doesn't match the solution is
+         treated as empty, so a wrong digit in a peer cell can't corrupt the
+         candidate check.
+      2. Naked Single  — exactly one candidate remains for the cell itself
+         → title "Last Number".
+      3. Hidden Single — checked per unit, box then row then column: every
+         other empty cell in that unit is unable to hold the value
+         → title "Only Spot Left in the Box/Row/Column".
+      4. Fallback       — neither applies (common on Hard/Impossible)
+         → title "No Easy Trick Here", neutral "this is just the number
+         that keeps the puzzle solvable" message. No strategy is claimed.
+  Priority is fixed and deterministic: naked single → box → row → column →
+  fallback. Target-cell selection itself is unchanged — this only explains
+  whichever cell GameController.hint() picks.
+
 ================================================================================
   DATA LAYER  (lib/data/)
 ================================================================================
@@ -81,6 +107,7 @@ difficulty.dart
     .label          lowercase string used for DB storage
     .toEngine()     maps to EngineGivenDifficulty
     .maxLives       5 / 4 / 3 / 1
+    .maxHints       5 / 3 / 2 / 1
     .fromString()   parses string → enum
 
 game_record.dart
@@ -91,8 +118,12 @@ game_record.dart
 saved_game.dart
   Immutable in-progress game snapshot for resume.
   Fields: currentGrid, puzzle, solution, difficulty, elapsedSeconds,
-          livesLeft, hintsLeft
-  toJsonString() / fromJsonString() for SharedPreferences.
+          livesLeft, hintsLeft, notes
+  toJson()/fromJson() + toJsonString()/fromJsonString() for SharedPreferences.
+
+sudoku_puzzle.dart
+  {puzzle, solution, difficulty} bundle. Defined but currently unused —
+  GameState/SavedGame carry these fields directly instead.
 
 game_state.dart  (lives in features/game/state/)
   GamePhase enum: loading / playing / won / lost
@@ -105,12 +136,12 @@ game_state.dart  (lives in features/game/state/)
     notesMode (pencil toggle)
     notes (Map<int, Set<int>> candidates per cell)
   Helpers: isGiven, isSelected, isMistake, isCorrect, isHighlighted,
-           isSameNumber, notesFor
+           isSameNumber, notesFor, isRowComplete, isColComplete, isBoxComplete
 
 --- DATA SOURCES ---
 
 database_helper.dart
-  Singleton. Lazy-initializes SQLite DB.
+  Singleton. Lazy-initializes SQLite DB, race-safe via shared Future.
   On Linux/desktop: uses sqflite_common_ffi + system libsqlite3.so.0.
   Creates table game_history:
     id INTEGER PK AUTOINCREMENT
@@ -156,13 +187,14 @@ MenuScreen
     bestTimesProvider   FutureProvider.autoDispose  → getAllBestTimes()
     savedGameProvider   FutureProvider.autoDispose  → loadCurrentGame()
   Layout (top to bottom):
-    "SUDOKU NOVA" title — gradient shader (cyan → purple)
+    "SUDOKU" title — gradient shader (cyan → purple)
     "Challenge your mind" subtitle
     PLAY button (cyan) → /difficulty
     RESUME button (green) — shown only when saved game exists → /game?resume=true
     BEST SCORES — 2×2 grid of BestScoreCard, one per difficulty
     HISTORY button → /history
     Settings icon → /settings
+  All buttons play SoundService.playTap() on press.
 
 BestScoreCard
   Shows best time per difficulty (or "--:--" if none).
@@ -175,30 +207,44 @@ DifficultyScreen
     Color-coded neon border and icon
     Subtitle description ("Great for beginners", etc.)
     Arrow indicator
-  Tap → context.go('/game?difficulty=<label>')
+  Tap → playTap(), then context.go('/game?difficulty=<label>')
+  Back arrow also plays playTap().
 
 --- GAME  (features/game/) ---
 
 GameScreen (ConsumerStatefulWidget + WidgetsBindingObserver)
+  Local state: _activeHint (HintExplanation?), _hintTimer (Timer?)
   initState:
     postFrameCallback (async):
-      Sets onGameOver callback on controller
+      Sets onGameOver callback on controller → navigates to /result
+      Sets onHint callback on controller:
+        stores the explanation, (re)starts a 5-second auto-dismiss Timer
       If resume=true: loads SavedGame → controller.resumeGame()
       Else: controller.startNewGame(difficulty)
   WidgetsBindingObserver: pauses timer on app background, resumes on foreground
   PopScope(canPop: false): intercepts Android back → saves game, goes to "/"
+  _exitToHome(): plays playTap(), pauses timer, navigates home
+  _dismissHint(): cancels the auto-dismiss Timer, plays playDismiss(), clears
+    _activeHint — shared by swipe-to-dismiss, the banner's close icon, and the
+    Timer's own expiry, so the sound fires exactly once per dismissal however
+    it happens
   AppBar: difficulty name, back button
   Body: _LoadingView (spinner) or _GameView
+  _GameView: HUD → AnimatedSize-wrapped HintBanner (only when _activeHint is
+    set) → board → action buttons → number pad
 
 GameController (StateNotifier<GameState>, autoDispose)
   Providers: gameControllerProvider, gameDifficultyProvider
+  Public callback fields: onGameOver(won, duration, isNewBest), onHint(explanation)
   startNewGame(difficulty)
     Stops timer, resets state to loading
     compute() → SudokuGenerator.generatePuzzleIsolate on background thread
-    Sets state to playing with difficulty.maxLives lives
+    Sets state to playing with difficulty.maxLives lives, difficulty.maxHints hints
     Starts 1-second timer, persists game immediately
   resumeGame(SavedGame)
     Restores full game state from saved snapshot, starts timer
+  selectCell(row, col)
+    Plays playSelect(), then selects/deselects as before
   enterNumber(number)
     Notes mode: toggles candidate in notes map
     Correct entry: updates grid, removes from mistakeCells, auto-persist
@@ -213,9 +259,16 @@ GameController (StateNotifier<GameState>, autoDispose)
     Pops grid snapshot from undoStack, recalculates mistakeCells
   hint()
     Finds first wrong/empty non-given cell (prefers selected)
-    Sets it to solution value, decrements hintsLeft
-    Checks for win condition
+    Computes a HintExplanation via HintExplainer.explain() against the
+      pre-reveal grid
+    Sets the cell to the solution value, decrements hintsLeft, and selects
+      that cell (so the board's existing row/col/box highlight reinforces
+      the explanation visually, for free)
+    If the reveal completes the puzzle → win flow runs, onHint is NOT
+      called (winning takes priority over showing an explanation)
+    Otherwise → plays playHint(), persists, calls onHint(explanation)
   toggleNotesMode()
+    Plays playSelect(), then toggles as before
   pauseTimer() / resumeTimer()
   _onGameOver(won)
     Snapshots state values
@@ -223,28 +276,45 @@ GameController (StateNotifier<GameState>, autoDispose)
     Saves GameRecord to DB (before navigation)
     Clears saved game from SharedPreferences
     Calls onGameOver callback → navigation to result screen
-  onGameOver callback: set by GameScreen in postFrameCallback
   Auto-persist: _persistGame() called on every state-changing action
 
-SudokuBoard (ConsumerWidget)
+SudokuBoard (ConsumerStatefulWidget)
   LayoutBuilder → fixed square size
   CustomPaint (_BoardGridPainter):
     Thin lines (0.5px, 50% border color) between cells
     Thick lines (2px, 40% cyan) around 3×3 boxes
     Outer border (2.5px, 60% cyan)
   81 SudokuCell widgets in 9-column grid
+  ref.listen on GameState: when a row/column/box transitions to complete,
+    staggers a celebration bounce+glow across its cells via a one-shot Timer
+    (cancelled in dispose — no leak)
 
-SudokuCell (StatelessWidget)
+SudokuCell (StatefulWidget, TickerProviderStateMixin)
   Background priority: mistake red > selected cyan > same-number highlight >
                        highlighted (same row/col/box) > given dim > normal
   Text color: mistake red > correct green > given white > user-entered cyan
-  value=0 + notes: shows _NotesGrid (3×3 micro-grid of candidates in purple)
+  Animations: selection pulse (scale tween-sequence), highlight entrance
+    flash, celebration bounce+glow (driven by SudokuBoard's staggered Timer)
+  value=0 + notes: shows _NotesGrid (3×3 micro-grid of candidates in purple,
+    sized to the cell's actual rendered size via LayoutBuilder)
   value≠0: animated Text (scale 0.6→1 + fadeIn over 120ms)
+
+HintBanner (features/game/widgets/hint_banner.dart)
+  Non-blocking banner, NOT a dialog — shown above the board via AnimatedSize
+    so gameplay continues immediately, no modal interrupt.
+  Content: lightbulb icon, explanation.title, explanation.reason, close (✕).
+  Dismissible(direction: up) — swipe away, tap ✕, or wait out the 5s auto-
+    timeout in GameScreen; all three funnel through the same dismiss path.
+  Styled with GlowContainer using accentPurple, matching the hint button/HUD
+    color used elsewhere.
 
 NumberPad
   9 buttons (1–9) in a horizontal row
-  Each: 36×48 container, cyan border, number text
-  Tap → controller.enterNumber(number)
+  Each: 34×50 container, cyan border, number text
+  A digit is disabled (shows a checkmark instead) once it's been placed in
+    all 9 cells across the grid
+  Tap → controller.enterNumber(number) (sound comes from enterNumber's own
+    correct/wrong outcome — no separate tap sound here, to avoid doubling up)
 
 GameHud
   Left: heart icons (filled=life remaining, outline=lost)
@@ -254,16 +324,16 @@ GameHud
 
 ActionButtons
   Undo, Erase, Hint, Notes — four icon+label buttons
-  Undo: disabled (opacity 0.4) if undoStack empty
-  Hint: disabled if hintsLeft == 0
-  Notes: green highlight when notesMode active
+  Undo: disabled (opacity 0.35) if undoStack empty
+  Hint: disabled if hintsLeft == 0; label shows "Hint (N)"
+  Notes: highlighted when notesMode active
 
 --- RESULT  (features/result/) ---
 
 ResultScreen
   Win: trophy icon, "Puzzle Solved!", time, "New Best Time!" badge if applicable
   Loss: sad icon, "Game Over", time
-  Buttons: PLAY AGAIN (same difficulty), HOME
+  Buttons: PLAY AGAIN (same difficulty), HOME — both play playTap() on press
   Staggered animations: icon (elastic scale 400ms) → title (slide+fade 300ms) →
                         stats card (slide+fade 300ms) → buttons (fade 250ms)
 
@@ -272,6 +342,7 @@ ResultScreen
 HistoryScreen
   historyProvider: FutureProvider.autoDispose → getHistory()
   Sorted by date DESC, rendered as ListView of HistoryTile
+  Back arrow plays playTap(). Tiles themselves are static (no tap handler).
 
 HistoryTile
   Difficulty badge (color-coded, uppercase label)
@@ -291,8 +362,12 @@ SettingsScreen
   Sections:
     APPEARANCE — Three-way theme toggle (System / Light / Dark)
                  Animated segment buttons with purple glow on selection
+                 Each pick plays playTap() (the Sound on/off Switch deliberately
+                 does NOT — playing a confirmation tone for toggling sound
+                 itself would be confusing)
     AUDIO      — Sound effects Switch (cyan track when on)
     ABOUT      — Version 1.0.0
+  Back arrow plays playTap().
 
 ================================================================================
   CORE LAYER  (lib/core/)
@@ -305,30 +380,32 @@ AppColorsExtension (ThemeExtension<AppColorsExtension>)
   Named tokens:
     background      Dark: #0D1117    Light: #F0F4F8
     surface         Dark: #1A2332    Light: #FFFFFF
-    surfaceVariant  Dark: #1E2D3D    Light: #E8EFF7
+    surfaceVariant  Dark: #243040    Light: #E4ECF4
     primaryNeon     Dark: #00F5FF    Light: #0095A8  (cyan)
     secondaryNeon   Dark: #39FF14    Light: #1A8C00  (green)
     accentPurple    Dark: #BF5FFF    Light: #7C3AED
     errorRed        Dark: #FF4444    Light: #DC2626
-    textPrimary     Dark: #E8F4F8    Light: #0F172A
-    textSecondary   Dark: #8CA0B3    Light: #475569
-    textDisabled    Dark: #3D5166    Light: #94A3B8
-    border          Dark: #2A3F54    Light: #CBD5E1
-    divider         Dark: #1E3048    Light: #E2E8F0
-    overlayDark     Dark: #0A0F1680  Light: #0F172240
+    textPrimary     Dark: #E8F4F8    Light: #0D1117
+    textSecondary   Dark: #8BA3B0    Light: #4B6280
+    textDisabled    Dark: #4A5568    Light: #9CA3AF
+    border          Dark: #2D3F54    Light: #CDD7E3
+    divider         Dark: #1E2D3D    Light: #E5EBF2
+    overlayDark     #80000000 (both)
   copyWith() / lerp() for ThemeExtension contract
   AppColorsContext extension: context.appColors shorthand
 
 AppTheme
   static ThemeData darkTheme   uses AppColorsExtension.dark + Brightness.dark
   static ThemeData lightTheme  uses AppColorsExtension.light + Brightness.light
-  Configures: ColorScheme, AppBarTheme, TextTheme, CardTheme, ButtonTheme,
-              SnackBarTheme, DialogTheme — all using color tokens
+  Configures: ColorScheme, AppBarTheme, TextTheme, CardTheme, ElevatedButton/
+              OutlinedButton themes, IconButtonTheme, DividerTheme,
+              SnackBarTheme (floating, unused so far), DialogTheme — all
+              driven by the color tokens above
 
 --- ROUTER ---
 
 AppRoutes constants
-  root         /
+  menu         /
   difficulty   /difficulty
   game         /game
   history      /history
@@ -346,11 +423,14 @@ GoRouter — six routes:
 
 --- CONSTANTS ---
 
-AppConstants
+AppConstants  (lib/core/constants/app_constants.dart)
   gridSize = 9
-  maxLives = 3    (legacy; active lives now come from Difficulty.maxLives)
-  maxHints = 3
+  maxLives = 3    (unreferenced anywhere — active lives now come entirely
+                   from Difficulty.maxLives; this constant is effectively
+                   dead code)
   boxSize  = 3
+  (maxHints was removed from this class — hint counts now come from
+   Difficulty.maxHints, see DIFFICULTY SYSTEM below)
 
 --- UTILS ---
 
@@ -359,12 +439,29 @@ DateFormatter.format(DateTime)      → "Jun 15, 2026"
 
 --- SERVICES ---
 
-SoundService (singleton)
-  AudioPlayer via audioplayers package
-  playCorrect() / playWrong() / playWin() / playLose()
-  setSoundEnabled(bool) — respected by all play methods
-  Haptic feedback on each play
-  Graceful: silent if sound disabled or asset missing
+ToneGenerator (lib/core/services/tone_generator.dart)
+  Pure Dart. Synthesizes every sound effect as PCM sine-wave samples with an
+  attack/release envelope, then encodes them to a 16-bit mono WAV byte buffer
+  at instantiation (cached `static final Uint8List` per sound — generated
+  once, reused for every play). No asset files anywhere.
+  Sounds: correct (two-note chime), wrong (low buzz), win (four-note
+    ascending arpeggio), lose (three-note descending fall), hint (high
+    bright ping), undo (neutral tick), erase (low soft click), tap (soft
+    click — navigation buttons), select (quieter/shorter — fires constantly
+    on cell taps and notes toggle), dismiss (soft descending two-note blip —
+    hint banner closing).
+
+SoundService (singleton, lib/core/services/sound_service.dart)
+  AudioPlayer (audioplayers package) plays the cached tone bytes via
+    BytesSource — no file I/O, no bundled audio assets.
+  Eagerly pre-generates all ten tones in the constructor so first playback
+    has no synthesis lag.
+  playCorrect() / playWrong() / playWin() / playLose() / playHint() /
+    playUndo() / playErase() / playTap() / playSelect() / playDismiss()
+  Each pairs a HapticFeedback call (selectionClick for most; light/medium/
+    heavy impact for correct/wrong/win/lose) with the matching tone.
+  setSoundEnabled(bool) — respected by all play methods; toggled from
+    SettingsScreen via soundEnabledProvider, wired in app.dart.
 
 ================================================================================
   APP ENTRY  (lib/)
@@ -387,6 +484,11 @@ pubspec.yaml  hooks.user_defines.sqlite3:
   (tells sqlite3 3.x build hook to use system library on Linux instead of
    trying to download/compile a native asset)
 
+NOTE: pubspec.yaml's flutter.assets still lists "assets/sounds/", but that
+directory no longer exists on disk (sound generation moved to ToneGenerator).
+Only assets/icon/ is present. This stale entry hasn't caused build failures
+seen so far, but should be removed if it ever does.
+
 ================================================================================
   DEPENDENCIES
 ================================================================================
@@ -396,11 +498,14 @@ go_router           ^14.0.0   Navigation (URI-based, query params)
 sqflite             ^2.3.0    SQLite database (Android native plugin)
 sqflite_common_ffi  ^2.3.0    SQLite via FFI (Linux/Windows/macOS desktop)
 sqlite3             ^3.3.3    Native SQLite3 bindings (transitive, configured above)
+path                ^1.9.0    Path joining for DB file location
 shared_preferences  ^2.2.0    Lightweight key-value store
 intl                ^0.19.0   Date/number formatting
 google_fonts        ^6.2.0    Custom font loading
 flutter_animate     ^4.5.0    Animation helpers (fadeIn, scale, slideY, etc.)
-audioplayers        ^6.0.0    Audio playback + haptic feedback
+audioplayers        ^6.0.0    Plays the in-memory synthesized WAV bytes
+                              (BytesSource) + haptic feedback; no longer
+                              used for any bundled audio file
 
 Dev dependencies:
 flutter_lints           ^6.0.0    Lint rules
@@ -409,7 +514,7 @@ flutter_native_splash   ^2.4.0    Generate Android splash screen
 
 Assets:
   assets/icon/     app_icon.png, splash_logo.png
-  assets/sounds/   correct.mp3, wrong.mp3, win.mp3, lose.mp3
+  (no sound assets — see NOTE above)
 
 ================================================================================
   GAME FLOW
@@ -417,7 +522,7 @@ Assets:
 
 1. Launch          → MenuScreen
                      Shows PLAY, optional RESUME, best scores per difficulty,
-                     HISTORY, Settings
+                     HISTORY, Settings. Every button plays a tap sound.
 
 2. Select mode     → DifficultyScreen
                      Easy / Medium / Hard / Impossible
@@ -431,10 +536,18 @@ Assets:
                      Board: 9×9 grid with neon box borders
                      HUD: hearts (lives), timer, hint count
                      Action bar: Undo / Erase / Hint / Notes toggle
-                     Number pad: digits 1–9
+                     Number pad: digits 1–9 (auto-disables once a digit is
+                       fully placed)
                      Cell colors: given (dim) / selected (cyan) / correct (green) /
                                   mistake (red) / same-number (highlight)
+                     Selecting a cell or toggling Notes mode plays a soft
+                       "select" tick
                      Notes mode: enter pencil-mark candidates (shown as 3×3 micro-grid)
+                     Using a hint reveals the cell, highlights its row/col/box
+                       (via auto-selection), and shows a swipeable banner
+                       above the board explaining why that number is forced —
+                       in plain language, not Sudoku jargon — auto-dismissing
+                       after 5 seconds
                      Every move auto-saved to SharedPreferences
 
 5. Win             → phase = won
@@ -481,12 +594,12 @@ Database init     Lazy singleton (DatabaseHelper.instance)
   DIFFICULTY SYSTEM
 ================================================================================
 
-  Difficulty    Clues    Missing cells    Lives    Generator target
-  ----------    -----    ------------     -----    ----------------
-  Easy          40–45    36–41            5        remove 38 cells
-  Medium        32–39    42–49            4        remove 45 cells
-  Hard          27–31    50–54            3        remove 52 cells
-  Impossible    22–26    55–59            1        remove 57 cells
+  Difficulty    Clues    Missing cells    Lives    Hints    Generator target
+  ----------    -----    ------------     -----    -----    ----------------
+  Easy          40–45    36–41            5        5        remove 38 cells
+  Medium        32–39    42–49            4        3        remove 45 cells
+  Hard          27–31    50–54            3        2        remove 52 cells
+  Impossible    22–26    55–59            1        1        remove 57 cells
 
 Puzzle uniqueness: every removed cell is verified to still leave exactly
 one solution before the removal is committed. This guarantee makes hints
@@ -496,8 +609,8 @@ and undo always valid.
   LIVES SYSTEM
 ================================================================================
 
-Lives are shown as heart icons in the HUD. The count is difficulty-specific:
-Easy=5, Medium=4, Hard=3, Impossible=1.
+Lives are shown as heart icons in the HUD. The count is difficulty-specific
+(see table above: Easy=5, Medium=4, Hard=3, Impossible=1).
 
 When a wrong digit is entered:
   - Cell background turns red
@@ -506,13 +619,81 @@ When a wrong digit is entered:
   - If livesLeft reaches 0 → GamePhase.lost → result screen
 
 ================================================================================
+  HINT SYSTEM
+================================================================================
+
+Hint allowance is difficulty-specific (see DIFFICULTY SYSTEM table above:
+Easy=5, Medium=3, Hard=2, Impossible=1) via Difficulty.maxHints.
+
+Using a hint:
+  1. GameController.hint() finds the target cell (selected cell if it's
+     empty/wrong, else the first empty/wrong cell scanning top-left to
+     bottom-right) — this selection logic is unchanged from before hints
+     gained explanations.
+  2. HintExplainer.explain() is run against the grid as it stood BEFORE the
+     reveal, to determine why the value is forced:
+       - Naked Single: only one candidate remains for the cell itself.
+       - Hidden Single (box/row/column, checked in that order): every other
+         empty cell in that unit is unable to hold the value.
+       - Fallback: neither applies — common on Hard/Impossible, where the
+         deduction needs a longer logic chain the explainer doesn't trace.
+  3. The cell is filled with the solution value and auto-selected, so the
+     board's existing row/column/box highlight visually reinforces whichever
+     unit the explanation refers to.
+  4. A HintBanner slides in above the board (not a modal — play continues
+     immediately) showing the explanation in plain language ("Last Number",
+     "Only Spot Left in the Box", "No Easy Trick Here", etc.) — never the
+     formal terms "Naked/Hidden Single" themselves.
+  5. The banner auto-dismisses after 5 seconds, or can be swiped up / tapped
+     closed early; all three paths play the same soft "dismiss" tone exactly
+     once.
+  6. If the hint also completes the puzzle, the win flow takes over and the
+     banner is never shown.
+
+================================================================================
+  SOUND SYSTEM
+================================================================================
+
+All ten effects are synthesized sine-wave tones (ToneGenerator) — there are
+no bundled audio files. Each is paired with haptic feedback in SoundService.
+
+  Trigger                                   Sound      Haptic
+  ----------------------------------------  ---------  -----------------
+  Correct digit entered                     correct    lightImpact
+  Wrong digit entered                       wrong      mediumImpact
+  Puzzle solved                             win        heavyImpact
+  All lives lost                            lose       heavyImpact
+  Hint reveals a cell                       hint       selectionClick
+  Undo                                      undo       selectionClick
+  Erase                                     erase      selectionClick
+  Cell selected / Notes mode toggled        select     selectionClick
+  Navigation button pressed (menu, back
+    arrows, difficulty/theme picks, etc.)   tap        selectionClick
+  Hint banner dismissed (swipe/tap/timeout) dismiss    selectionClick
+
+Deliberately silent: the Sound on/off Switch in Settings (a confirmation
+tone for toggling sound itself would be confusing), and NumberPad digit taps
+(already produce correct/wrong via GameController.enterNumber() — a generic
+tap there would double up).
+
+================================================================================
   TESTING
 ================================================================================
 
-test/engine/sudoku_solver_test.dart      Unit tests for solver
-test/engine/sudoku_validator_test.dart   Unit tests for validator
-test/features/sudoku_board_test.dart     Widget test for board rendering
-test/features/number_pad_test.dart       Widget test for number pad
+test/engine/sudoku_solver_test.dart        Unit tests for the backtracking solver
+test/engine/sudoku_validator_test.dart     Unit tests for move/grid validation
+test/engine/sudoku_generator_test.dart     Solution validity, clue counts per
+                                            difficulty, uniqueness, isolate entry point
+test/engine/hint_explainer_test.dart       One hand-built grid per strategy branch:
+                                            naked single, hidden single (box/row/
+                                            column), and the logical-deduction fallback
+test/features/game/widgets/sudoku_board_test.dart   Board renders 81 cells, cells
+                                            show currentGrid values, tapping doesn't throw
+test/features/game/widgets/number_pad_test.dart     Renders digits 1–9
+test/widget_test.dart                      App boot smoke test — currently failing
+                                            (pending Timer assertion after a single
+                                            pumpWidget with no settle; pre-existing,
+                                            unrelated to engine/hint/sound work)
 
 Run all:    flutter test
 Run single: flutter test test/engine/sudoku_solver_test.dart

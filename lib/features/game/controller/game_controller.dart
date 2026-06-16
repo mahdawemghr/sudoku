@@ -2,13 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:sudoku/core/constants/app_constants.dart';
 import 'package:sudoku/data/models/difficulty.dart';
 import 'package:sudoku/data/models/game_record.dart';
 import 'package:sudoku/data/models/saved_game.dart';
 import 'package:sudoku/core/services/sound_service.dart';
 import 'package:sudoku/data/repositories/game_repository.dart';
 import 'package:sudoku/data/repositories/stats_repository.dart';
+import 'package:sudoku/engine/hint_explainer.dart';
 import 'package:sudoku/engine/sudoku_generator.dart';
 import 'package:sudoku/features/game/state/game_state.dart';
 
@@ -40,6 +40,9 @@ class GameController extends StateNotifier<GameState> {
 
   /// Called when the game ends. Arguments: won, durationSeconds, isNewBest.
   void Function(bool won, int duration, bool isNewBest)? onGameOver;
+
+  /// Called after a hint reveals a cell (unless that hint also wins the game).
+  void Function(HintExplanation explanation)? onHint;
 
   int _totalMistakes = 0;
   final SoundService _sound = SoundService();
@@ -87,7 +90,7 @@ class GameController extends StateNotifier<GameState> {
       selectedRow: -1,
       selectedCol: -1,
       livesLeft: difficulty.maxLives,
-      hintsLeft: AppConstants.maxHints,
+      hintsLeft: difficulty.maxHints,
       elapsedSeconds: 0,
       mistakeCells: {},
       undoStack: [],
@@ -125,6 +128,7 @@ class GameController extends StateNotifier<GameState> {
 
   void selectCell(int row, int col) {
     if (state.phase != GamePhase.playing) return;
+    _sound.playSelect();
     if (state.selectedRow == row && state.selectedCol == col) {
       state = state.copyWith(selectedRow: -1, selectedCol: -1);
     } else {
@@ -341,6 +345,8 @@ class GameController extends StateNotifier<GameState> {
     }
 
     final (r, c) = target;
+    final explanation = HintExplainer.explain(state.currentGrid, state.solution, r, c);
+
     final newGrid =
         List.generate(9, (row) => List<int>.from(state.currentGrid[row]));
     newGrid[r][c] = state.solution[r][c];
@@ -354,6 +360,8 @@ class GameController extends StateNotifier<GameState> {
       mistakeCells: newMistakes,
       notes: newNotes,
       hintsLeft: state.hintsLeft - 1,
+      selectedRow: r,
+      selectedCol: c,
     );
 
     if (_isGridComplete(newGrid)) {
@@ -364,11 +372,13 @@ class GameController extends StateNotifier<GameState> {
     } else {
       _sound.playHint();
       _persistGame();
+      onHint?.call(explanation);
     }
   }
 
   void toggleNotesMode() {
     if (state.phase != GamePhase.playing) return;
+    _sound.playSelect();
     state = state.copyWith(notesMode: !state.notesMode);
   }
 

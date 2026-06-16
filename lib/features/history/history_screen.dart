@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sudoku/core/services/sound_service.dart';
 import 'package:sudoku/core/theme/app_colors.dart';
 import 'package:sudoku/data/models/game_record.dart';
 import 'package:sudoku/data/repositories/game_repository.dart';
@@ -29,7 +30,10 @@ class HistoryScreen extends ConsumerWidget {
             Icons.arrow_back_ios_new_rounded,
             color: colors.textSecondary,
           ),
-          onPressed: () => context.pop(),
+          onPressed: () {
+            SoundService().playTap();
+            context.pop();
+          },
         ),
         title: Text(
           'History',

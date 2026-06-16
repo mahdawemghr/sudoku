@@ -49,6 +49,20 @@ class ToneGenerator {
   static final Uint8List erase = _single(277.18, 55,
       amplitude: 0.38, releaseFrac: 0.40);
 
+  /// Soft, brief click — navigation button press.
+  static final Uint8List tap = _single(523.25, 40,
+      amplitude: 0.40, attackFrac: 0.10, releaseFrac: 0.45);
+
+  /// Quieter, shorter tick — cell selection / notes toggle (fires often).
+  static final Uint8List select = _single(659.25, 25,
+      amplitude: 0.26, attackFrac: 0.10, releaseFrac: 0.50);
+
+  /// Soft descending blip — hint banner dismissed.
+  static final Uint8List dismiss = _twoNote(
+    f1: 587.33, ms1: 30,
+    f2: 440.0, ms2: 35,
+  );
+
   // --- builders ---
 
   static Uint8List _single(

@@ -18,6 +18,9 @@ class SoundService {
     ToneGenerator.hint;
     ToneGenerator.undo;
     ToneGenerator.erase;
+    ToneGenerator.tap;
+    ToneGenerator.select;
+    ToneGenerator.dismiss;
   }
 
   final AudioPlayer _player = AudioPlayer();
@@ -58,6 +61,21 @@ class SoundService {
   Future<void> playErase() async {
     await _haptic(HapticFeedback.selectionClick);
     await _play(ToneGenerator.erase);
+  }
+
+  Future<void> playTap() async {
+    await _haptic(HapticFeedback.selectionClick);
+    await _play(ToneGenerator.tap);
+  }
+
+  Future<void> playSelect() async {
+    await _haptic(HapticFeedback.selectionClick);
+    await _play(ToneGenerator.select);
+  }
+
+  Future<void> playDismiss() async {
+    await _haptic(HapticFeedback.selectionClick);
+    await _play(ToneGenerator.dismiss);
   }
 
   Future<void> _haptic(Future<void> Function() fn) async {

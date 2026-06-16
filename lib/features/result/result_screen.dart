@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sudoku/core/services/sound_service.dart';
 import 'package:sudoku/core/theme/app_colors.dart';
 import 'package:sudoku/core/utils/duration_formatter.dart';
 
@@ -256,6 +257,7 @@ class _ResultButtonState extends State<_ResultButton> {
       onTapDown: (_) => setState(() => _pressed = true),
       onTapUp: (_) {
         setState(() => _pressed = false);
+        SoundService().playTap();
         widget.onTap();
       },
       onTapCancel: () => setState(() => _pressed = false),

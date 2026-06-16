@@ -1,14 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sudoku/core/services/sound_service.dart';
 import 'package:sudoku/core/theme/app_colors.dart';
 import 'package:sudoku/data/models/difficulty.dart';
 import 'package:sudoku/data/repositories/game_repository.dart';
+import 'package:sudoku/engine/hint_explainer.dart';
 import 'package:sudoku/features/game/controller/game_controller.dart';
 import 'package:sudoku/features/game/state/game_state.dart';
 import 'package:sudoku/features/game/widgets/action_buttons.dart';
 import 'package:sudoku/features/game/widgets/game_hud.dart';
+import 'package:sudoku/features/game/widgets/hint_banner.dart';
 import 'package:sudoku/features/game/widgets/number_pad.dart';
 import 'package:sudoku/features/game/widgets/sudoku_board.dart';
 
@@ -25,6 +30,8 @@ class GameScreen extends ConsumerStatefulWidget {
 class _GameScreenState extends ConsumerState<GameScreen>
     with WidgetsBindingObserver {
   late Difficulty _difficulty;
+  HintExplanation? _activeHint;
+  Timer? _hintTimer;
 
   @override
   void initState() {
@@ -47,6 +54,15 @@ class _GameScreenState extends ConsumerState<GameScreen>
           '&difficulty=${_difficulty.label}'
           '&isNewBest=$isNewBest',
         );
+      };
+
+      controller.onHint = (explanation) {
+        if (!mounted) return;
+        setState(() => _activeHint = explanation);
+        _hintTimer?.cancel();
+        _hintTimer = Timer(const Duration(seconds: 5), () {
+          if (mounted) _dismissHint();
+        });
       };
 
       if (widget.resume) {
@@ -76,13 +92,22 @@ class _GameScreenState extends ConsumerState<GameScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _hintTimer?.cancel();
     super.dispose();
   }
 
   void _exitToHome() {
+    SoundService().playTap();
     final controller = ref.read(gameControllerProvider.notifier);
     controller.pauseTimer();
     context.go('/');
+  }
+
+  void _dismissHint() {
+    if (_activeHint == null) return;
+    _hintTimer?.cancel();
+    SoundService().playDismiss();
+    setState(() => _activeHint = null);
   }
 
   @override
@@ -134,7 +159,12 @@ class _GameScreenState extends ConsumerState<GameScreen>
           ),
           child: gameState.isLoading
               ? const _LoadingView(key: ValueKey('loading'))
-              : _GameView(key: const ValueKey('game'), phase: gameState.phase),
+              : _GameView(
+                  key: const ValueKey('game'),
+                  phase: gameState.phase,
+                  hint: _activeHint,
+                  onDismissHint: _dismissHint,
+                ),
         ),
       ),
     );
@@ -176,8 +206,15 @@ class _LoadingView extends StatelessWidget {
 
 class _GameView extends StatelessWidget {
   final GamePhase phase;
+  final HintExplanation? hint;
+  final VoidCallback onDismissHint;
 
-  const _GameView({super.key, required this.phase});
+  const _GameView({
+    super.key,
+    required this.phase,
+    required this.hint,
+    required this.onDismissHint,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -189,6 +226,21 @@ class _GameView extends StatelessWidget {
               .fadeIn(duration: 300.ms, curve: Curves.easeOut)
               .slideY(begin: -0.15, end: 0, duration: 300.ms, curve: Curves.easeOut),
           const SizedBox(height: 6),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOut,
+            alignment: Alignment.topCenter,
+            child: hint == null
+                ? const SizedBox(width: double.infinity)
+                : Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+                    child: HintBanner(
+                      key: ValueKey(hint),
+                      explanation: hint!,
+                      onDismiss: onDismissHint,
+                    ),
+                  ),
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8.0),
             child: const SudokuBoard()
