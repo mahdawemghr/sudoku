@@ -128,7 +128,7 @@ class _SudokuCellState extends State<SudokuCell>
     // so 9% is invisible. Dark mode uses bright cyan (#00F5FF) where even 9% pops.
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final selectedAlpha   = isDark ? 0.22 : 0.42;
-    final sameNumAlpha    = isDark ? 0.08 : 0.26;
+    final sameNumAlpha    = isDark ? 0.18 : 0.26;
     final highlightAlpha  = isDark ? 0.03 : 0.18;
     final mistakeAlpha    = isDark ? 0.20 : 0.18;
 
@@ -212,6 +212,7 @@ class _SudokuCellState extends State<SudokuCell>
                       notes: widget.notes,
                       colors: colors,
                       highlightedNote: widget.highlightedNote,
+                      isDark: isDark,
                     )
                   : null,
         ),
@@ -284,10 +285,12 @@ class _NotesGrid extends StatelessWidget {
   final Set<int> notes;
   final AppColorsExtension colors;
   final int? highlightedNote;
+  final bool isDark;
 
   const _NotesGrid({
     required this.notes,
     required this.colors,
+    required this.isDark,
     this.highlightedNote,
   });
 
@@ -330,9 +333,11 @@ class _NotesGrid extends StatelessWidget {
               '$n',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: isHighlighted ? colors.primaryNeon : colors.accentPurple,
+                color: isHighlighted
+                    ? colors.primaryNeon
+                    : (isDark ? colors.textPrimary : colors.accentPurple),
                 fontSize: isHighlighted ? fontSize * 1.15 : fontSize,
-                fontWeight: isHighlighted ? FontWeight.w900 : FontWeight.w700,
+                fontWeight: isHighlighted ? FontWeight.w900 : FontWeight.w600,
               ),
             ),
           ),
