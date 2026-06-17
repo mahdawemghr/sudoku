@@ -46,14 +46,23 @@ class _GameScreenState extends ConsumerState<GameScreen>
       final controller = ref.read(gameControllerProvider.notifier);
 
       controller.onGameOver = (won, duration, isNewBest) {
+        void navigate() {
+          if (!mounted) return;
+          context.go(
+            '/result'
+            '?won=$won'
+            '&duration=$duration'
+            '&difficulty=${_difficulty.label}'
+            '&isNewBest=$isNewBest',
+          );
+        }
+
         if (!mounted) return;
-        context.go(
-          '/result'
-          '?won=$won'
-          '&duration=$duration'
-          '&difficulty=${_difficulty.label}'
-          '&isNewBest=$isNewBest',
-        );
+        if (won) {
+          Future.delayed(kWinCelebrationDelay, navigate);
+        } else {
+          navigate();
+        }
       };
 
       controller.onHint = (explanation) {
