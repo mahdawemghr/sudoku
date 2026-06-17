@@ -40,36 +40,28 @@ moving from the top-left corner to the bottom-right corner. It also
 naturally covers whichever row/col/box completed on the winning move, so
 there's no risk of two staggers firing over each other on the same frame.
 
-### 2. Per-cell animation (reused as-is)
+### 2. Per-cell animation (reused as-is, no changes to SudokuCell)
 
 `SudokuCell`'s existing celebration `AnimationController` (450ms scale-bounce
-+ glow TweenSequence, `lib/features/game/widgets/sudoku_cell.dart:75-89`) is
-reused unchanged — same visual treatment as row/col/box completions, just
-triggered across the whole board.
-
-The only change to `SudokuCell` is making the per-step delay multiplier
-configurable. Today `didUpdateWidget` hardcodes `widget.celebrationStep! * 48`
-(48ms per step). Add a `celebrationStepMs` field (default `48`) so
-`SudokuBoard` can pass a different pace for the win sweep:
-
-```dart
-final delay = widget.celebrationStep! * widget.celebrationStepMs;
-```
++ glow TweenSequence, `lib/features/game/widgets/sudoku_cell.dart:75-89`) and
+its existing 48ms-per-step pacing (`sudoku_cell.dart:108`,
+`widget.celebrationStep! * 48`) are reused completely unchanged — same
+visual treatment as row/col/box completions, just triggered across the
+whole board. `SudokuCell` requires no code changes at all.
 
 ### 3. Win sweep pacing
 
-`SudokuBoard` passes `celebrationStepMs: 55` when rendering cells during a
-win sweep (vs. the default 48 for row/col/box). With 17 diagonal steps
-(0–16), the last diagonal starts at 16×55=880ms and finishes its 450ms
-animation at ~1330ms.
+With 17 diagonal steps (0–16) at the existing 48ms/step, the last diagonal
+starts at 16×48=768ms and finishes its 450ms animation at ~1218ms — already
+in the "snappy ~1.2s" range, so no pacing changes are needed anywhere.
 
 A constant captures the total wait the result page must honor:
 
 ```dart
-/// Must stay ≥ the full sweep duration (16 steps × 55ms + 450ms cell
-/// animation ≈ 1330ms), plus a short buffer so the player sees the fully
+/// Must stay ≥ the full sweep duration (16 steps × 48ms + 450ms cell
+/// animation ≈ 1218ms), plus a short buffer so the player sees the fully
 /// lit board before the page transitions.
-const Duration kWinCelebrationDelay = Duration(milliseconds: 1500);
+const Duration kWinCelebrationDelay = Duration(milliseconds: 1400);
 ```
 
 Defined alongside the other board-celebration constants in
