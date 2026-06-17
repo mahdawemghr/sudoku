@@ -61,9 +61,12 @@ class HintBanner extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 6),
-            GestureDetector(
-              onTap: onDismiss,
-              child: Icon(Icons.close_rounded, color: colors.textSecondary, size: 18),
+            IconButton(
+              onPressed: onDismiss,
+              icon: Icon(Icons.close_rounded, color: colors.textSecondary, size: 18),
+              tooltip: 'Dismiss hint',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
             ),
           ],
         ),

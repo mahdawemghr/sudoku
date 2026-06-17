@@ -9,6 +9,7 @@ import 'package:sudoku/data/models/saved_game.dart';
 import 'package:sudoku/data/repositories/game_repository.dart';
 import 'package:sudoku/data/repositories/stats_repository.dart';
 import 'package:sudoku/features/menu/widgets/best_score_card.dart';
+import 'package:sudoku/shared/widgets/neon_button.dart';
 
 final bestTimesProvider = FutureProvider.autoDispose<Map<Difficulty, int?>>((
   ref,
@@ -88,7 +89,7 @@ class MenuScreen extends ConsumerWidget {
 
               const SizedBox(height: 44),
 
-              _NeonButton(
+              NeonButton(
                     label: 'PLAY',
                     color: colors.primaryNeon,
                     onTap: () => context.push('/difficulty'),
@@ -110,7 +111,7 @@ class MenuScreen extends ConsumerWidget {
                   return Padding(
                     padding: const EdgeInsets.only(top: 14.0),
                     child:
-                        _NeonButton(
+                        NeonButton(
                               label:
                                   'RESUME  ${saved.difficulty.displayName.toUpperCase()}',
                               color: colors.secondaryNeon,
@@ -192,7 +193,7 @@ class MenuScreen extends ConsumerWidget {
               Row(
                     children: [
                       Expanded(
-                        child: _NeonButton(
+                        child: NeonButton(
                           label: 'HISTORY',
                           color: colors.accentPurple,
                           onTap: () => context.push('/history'),
@@ -203,6 +204,7 @@ class MenuScreen extends ConsumerWidget {
                         icon: Icons.settings_rounded,
                         color: colors.textSecondary,
                         onTap: () => context.push('/settings'),
+                        semanticLabel: 'Settings',
                       ),
                     ],
                   )
@@ -224,82 +226,17 @@ class MenuScreen extends ConsumerWidget {
   }
 }
 
-class _NeonButton extends StatefulWidget {
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _NeonButton({
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  State<_NeonButton> createState() => _NeonButtonState();
-}
-
-class _NeonButtonState extends State<_NeonButton> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) {
-        setState(() => _pressed = false);
-        SoundService().playTap();
-        widget.onTap();
-      },
-      onTapCancel: () => setState(() => _pressed = false),
-      child: AnimatedScale(
-        scale: _pressed ? 0.96 : 1.0,
-        duration: const Duration(milliseconds: 80),
-        curve: Curves.easeOut,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 80),
-          curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(vertical: 18),
-          decoration: BoxDecoration(
-            color: widget.color.withValues(alpha: _pressed ? 0.2 : 0.12),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: widget.color.withValues(alpha: _pressed ? 1.0 : 0.85),
-              width: 1.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: widget.color.withValues(alpha: _pressed ? 0.4 : 0.25),
-                blurRadius: _pressed ? 20 : 16,
-                spreadRadius: 0,
-              ),
-            ],
-          ),
-          child: Text(
-            widget.label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: widget.color,
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 3,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _IconNeonButton extends StatefulWidget {
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
+  final String semanticLabel;
 
   const _IconNeonButton({
     required this.icon,
     required this.color,
     required this.onTap,
+    required this.semanticLabel,
   });
 
   @override
@@ -311,31 +248,35 @@ class _IconNeonButtonState extends State<_IconNeonButton> {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) {
-        setState(() => _pressed = false);
-        SoundService().playTap();
-        widget.onTap();
-      },
-      onTapCancel: () => setState(() => _pressed = false),
-      child: AnimatedScale(
-        scale: _pressed ? 0.91 : 1.0,
-        duration: const Duration(milliseconds: 80),
-        curve: Curves.easeOut,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 80),
-          width: 58,
-          padding: const EdgeInsets.symmetric(vertical: 18),
-          decoration: BoxDecoration(
-            color: widget.color.withValues(alpha: _pressed ? 0.15 : 0.08),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: widget.color.withValues(alpha: _pressed ? 0.9 : 0.5),
-              width: 1.5,
+    return Semantics(
+      label: widget.semanticLabel,
+      button: true,
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) {
+          setState(() => _pressed = false);
+          SoundService().playTap();
+          widget.onTap();
+        },
+        onTapCancel: () => setState(() => _pressed = false),
+        child: AnimatedScale(
+          scale: _pressed ? 0.91 : 1.0,
+          duration: kButtonPressDuration,
+          curve: Curves.easeOut,
+          child: AnimatedContainer(
+            duration: kButtonPressDuration,
+            width: 58,
+            padding: const EdgeInsets.symmetric(vertical: 18),
+            decoration: BoxDecoration(
+              color: widget.color.withValues(alpha: _pressed ? 0.15 : 0.08),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: widget.color.withValues(alpha: _pressed ? 0.9 : 0.5),
+                width: 1.5,
+              ),
             ),
+            child: Icon(widget.icon, color: widget.color, size: 22),
           ),
-          child: Icon(widget.icon, color: widget.color, size: 22),
         ),
       ),
     );

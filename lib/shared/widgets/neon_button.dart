@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:sudoku/core/services/sound_service.dart';
 import 'package:sudoku/core/theme/app_colors.dart';
 
-class NeonButton extends StatelessWidget {
+/// Shared press-feedback timing for neon-styled buttons (NeonButton here
+/// and the icon-only button in the menu screen).
+const Duration kButtonPressDuration = Duration(milliseconds: 80);
+
+class NeonButton extends StatefulWidget {
   final String label;
   final Color color;
   final VoidCallback onTap;
@@ -20,31 +25,54 @@ class NeonButton extends StatelessWidget {
   });
 
   @override
+  State<NeonButton> createState() => _NeonButtonState();
+}
+
+class _NeonButtonState extends State<NeonButton> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(vertical: verticalPadding),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color, width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: color.withValues(alpha: 0.25),
-              blurRadius: 16,
-              spreadRadius: 0,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        SoundService().playTap();
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.96 : 1.0,
+        duration: kButtonPressDuration,
+        curve: Curves.easeOut,
+        child: AnimatedContainer(
+          duration: kButtonPressDuration,
+          curve: Curves.easeOut,
+          padding: EdgeInsets.symmetric(vertical: widget.verticalPadding),
+          decoration: BoxDecoration(
+            color: widget.color.withValues(alpha: _pressed ? 0.2 : 0.12),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: widget.color.withValues(alpha: _pressed ? 1.0 : 0.85),
+              width: 1.5,
             ),
-          ],
-        ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: color,
-            fontSize: fontSize,
-            fontWeight: FontWeight.w800,
-            letterSpacing: letterSpacing,
+            boxShadow: [
+              BoxShadow(
+                color: widget.color.withValues(alpha: _pressed ? 0.4 : 0.25),
+                blurRadius: _pressed ? 20 : 16,
+                spreadRadius: 0,
+              ),
+            ],
+          ),
+          child: Text(
+            widget.label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: widget.color,
+              fontSize: widget.fontSize,
+              fontWeight: FontWeight.w800,
+              letterSpacing: widget.letterSpacing,
+            ),
           ),
         ),
       ),

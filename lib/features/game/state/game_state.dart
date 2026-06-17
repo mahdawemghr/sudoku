@@ -3,6 +3,22 @@ import 'package:sudoku/data/models/difficulty.dart';
 
 enum GamePhase { loading, playing, won, lost }
 
+/// A snapshot of everything a move can change, pushed onto the undo stack
+/// before that move is applied so undo can fully revert it — not just the
+/// grid, but the notes and mistake-tracking it also touched.
+@immutable
+class UndoSnapshot {
+  final List<List<int>> grid;
+  final Map<int, Set<int>> notes;
+  final Set<int> mistakeCells;
+
+  const UndoSnapshot({
+    required this.grid,
+    required this.notes,
+    required this.mistakeCells,
+  });
+}
+
 @immutable
 class GameState {
   final List<List<int>> currentGrid;
@@ -16,7 +32,7 @@ class GameState {
   final int hintsLeft;
   final int elapsedSeconds;
   final Set<int> mistakeCells;
-  final List<List<List<int>>> undoStack;
+  final List<UndoSnapshot> undoStack;
   final bool notesMode;
   // key: row*9+col, value: set of candidate numbers
   final Map<int, Set<int>> notes;
@@ -69,7 +85,7 @@ class GameState {
     int? hintsLeft,
     int? elapsedSeconds,
     Set<int>? mistakeCells,
-    List<List<List<int>>>? undoStack,
+    List<UndoSnapshot>? undoStack,
     bool? notesMode,
     Map<int, Set<int>>? notes,
   }) {

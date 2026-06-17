@@ -7,12 +7,18 @@ import 'package:sudoku/features/game/controller/game_controller.dart';
 import 'package:sudoku/features/game/state/game_state.dart';
 import 'package:sudoku/features/game/widgets/sudoku_cell.dart';
 
-/// Total wait before the win-sweep celebration is considered finished.
-/// Must stay ≥ the full sweep duration (16 diagonal steps × the existing
-/// 48ms-per-step pacing in SudokuCell + its 450ms cell animation ≈ 1218ms),
-/// plus a short buffer so the player sees the fully lit board before
-/// GameScreen navigates to the result page.
-const Duration kWinCelebrationDelay = Duration(milliseconds: 1400);
+/// The bottom-right cell's diagonal step (row 8 + col 8) — the last cell
+/// to start animating in the win sweep.
+const int _winSweepMaxStep = 16;
+
+/// Total wait before the win-sweep celebration is considered finished:
+/// the last diagonal's stagger delay + its cell animation, plus a short
+/// buffer so the player sees the fully lit board before GameScreen
+/// navigates to the result page. Derived from SudokuCell's shared pacing
+/// constants so the two stay in sync automatically.
+const Duration kWinCelebrationDelay = Duration(
+  milliseconds: _winSweepMaxStep * kCelebrationStepMs + kCelebrationDurationMs + 200,
+);
 
 class SudokuBoard extends ConsumerStatefulWidget {
   const SudokuBoard({super.key});

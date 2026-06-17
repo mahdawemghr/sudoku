@@ -2,6 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:sudoku/core/theme/app_colors.dart';
 
+/// Per-step stagger delay for the celebration sweep — shared by the
+/// row/col/box ripple and the full-board win sweep in SudokuBoard, so the
+/// win sweep's total-duration math stays in sync with this value.
+const int kCelebrationStepMs = 48;
+
+/// How long each cell's celebration bounce + glow animation takes.
+const int kCelebrationDurationMs = 450;
+const Duration kCelebrationDuration = Duration(milliseconds: kCelebrationDurationMs);
+
 class SudokuCell extends StatefulWidget {
   final int value;
   final bool isGiven;
@@ -74,7 +83,7 @@ class _SudokuCellState extends State<SudokuCell>
 
     _celebCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 450),
+      duration: kCelebrationDuration,
     );
     _celebScale = TweenSequence<double>([
       TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.20), weight: 25),
@@ -105,7 +114,7 @@ class _SudokuCellState extends State<SudokuCell>
 
     // Celebrate when a new step is assigned
     if (old.celebrationStep == null && widget.celebrationStep != null) {
-      final delay = widget.celebrationStep! * 48;
+      final delay = widget.celebrationStep! * kCelebrationStepMs;
       Future.delayed(Duration(milliseconds: delay), () {
         if (mounted) _celebCtrl.forward(from: 0.0);
       });
@@ -128,7 +137,7 @@ class _SudokuCellState extends State<SudokuCell>
     // so 9% is invisible. Dark mode uses bright cyan (#00F5FF) where even 9% pops.
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final selectedAlpha   = isDark ? 0.22 : 0.42;
-    final sameNumAlpha    = isDark ? 0.18 : 0.26;
+    final sameNumAlpha    = isDark ? 0.32 : 0.40;
     final highlightAlpha  = isDark ? 0.03 : 0.18;
     final mistakeAlpha    = isDark ? 0.20 : 0.18;
 
@@ -212,7 +221,6 @@ class _SudokuCellState extends State<SudokuCell>
                       notes: widget.notes,
                       colors: colors,
                       highlightedNote: widget.highlightedNote,
-                      isDark: isDark,
                     )
                   : null,
         ),
@@ -285,12 +293,10 @@ class _NotesGrid extends StatelessWidget {
   final Set<int> notes;
   final AppColorsExtension colors;
   final int? highlightedNote;
-  final bool isDark;
 
   const _NotesGrid({
     required this.notes,
     required this.colors,
-    required this.isDark,
     this.highlightedNote,
   });
 
@@ -333,9 +339,7 @@ class _NotesGrid extends StatelessWidget {
               '$n',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: isHighlighted
-                    ? colors.primaryNeon
-                    : (isDark ? colors.textPrimary : colors.accentPurple),
+                color: isHighlighted ? colors.primaryNeon : colors.textPrimary,
                 fontSize: isHighlighted ? fontSize * 1.15 : fontSize,
                 fontWeight: isHighlighted ? FontWeight.w900 : FontWeight.w600,
               ),

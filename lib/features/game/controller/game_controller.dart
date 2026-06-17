@@ -45,13 +45,15 @@ class GameController extends StateNotifier<GameState> {
   void Function(HintExplanation explanation)? onHint;
 
   int _totalMistakes = 0;
-  final SoundService _sound = SoundService();
+  final GameSoundPlayer _sound;
 
   GameController({
     required GameRepository gameRepository,
     required StatsRepository statsRepository,
+    GameSoundPlayer? soundService,
   })  : _gameRepository = gameRepository,
         _statsRepository = statsRepository,
+        _sound = soundService ?? SoundService(),
         super(GameState.initial()) {
     // Warm the database connection while the user is on the game loading screen
     // so the first game-over DB write is instant.
@@ -164,10 +166,9 @@ class GameController extends StateNotifier<GameState> {
 
     if (state.currentGrid[r][c] == number) return;
 
-    // Push current grid onto undo stack (deep copy).
-    final gridSnapshot =
-        List.generate(9, (row) => List<int>.from(state.currentGrid[row]));
-    final newUndoStack = [...state.undoStack, gridSnapshot];
+    // Push a full snapshot (grid + notes + mistakes) onto the undo stack
+    // before this move changes any of them, so undo can fully revert it.
+    final newUndoStack = [...state.undoStack, _snapshot()];
 
     final newGrid =
         List.generate(9, (row) => List<int>.from(state.currentGrid[row]));
@@ -273,9 +274,7 @@ class GameController extends StateNotifier<GameState> {
 
     if (state.currentGrid[r][c] == 0) return;
 
-    final gridSnapshot =
-        List.generate(9, (row) => List<int>.from(state.currentGrid[row]));
-    final newUndoStack = [...state.undoStack, gridSnapshot];
+    final newUndoStack = [...state.undoStack, _snapshot()];
 
     final newGrid =
         List.generate(9, (row) => List<int>.from(state.currentGrid[row]));
@@ -296,23 +295,14 @@ class GameController extends StateNotifier<GameState> {
     if (state.phase != GamePhase.playing) return;
     if (state.undoStack.isEmpty) return;
 
-    final newStack = List<List<List<int>>>.from(state.undoStack);
-    final previousGrid = newStack.removeLast();
-
-    final newMistakes = <int>{};
-    for (int r = 0; r < 9; r++) {
-      for (int c = 0; c < 9; c++) {
-        final val = previousGrid[r][c];
-        if (val != 0 && val != state.solution[r][c]) {
-          newMistakes.add(r * 9 + c);
-        }
-      }
-    }
+    final newStack = List<UndoSnapshot>.from(state.undoStack);
+    final previous = newStack.removeLast();
 
     state = state.copyWith(
-      currentGrid: previousGrid,
+      currentGrid: previous.grid,
       undoStack: newStack,
-      mistakeCells: newMistakes,
+      mistakeCells: previous.mistakeCells,
+      notes: previous.notes,
     );
     _sound.playUndo();
     _persistGame();
@@ -417,6 +407,17 @@ class GameController extends StateNotifier<GameState> {
     return true;
   }
 
+  /// Captures the grid, notes, and mistake-tracking exactly as they are now,
+  /// for pushing onto the undo stack before a move changes any of them.
+  UndoSnapshot _snapshot() {
+    return UndoSnapshot(
+      grid: List.generate(9, (row) => List<int>.from(state.currentGrid[row])),
+      notes: state.notes
+          .map((key, value) => MapEntry(key, Set<int>.from(value))),
+      mistakeCells: Set<int>.from(state.mistakeCells),
+    );
+  }
+
   void _persistGame() {
     final saved = SavedGame(
       currentGrid: List.generate(9, (r) => List<int>.from(state.currentGrid[r])),
@@ -428,7 +429,9 @@ class GameController extends StateNotifier<GameState> {
       hintsLeft: state.hintsLeft,
       notes: state.notes,
     );
-    _gameRepository.saveCurrentGame(saved);
+    _gameRepository.saveCurrentGame(saved).catchError((e) {
+      debugPrint('[GameController] persistGame failed: $e');
+    });
   }
 
   Future<void> _onGameOver({required bool won}) async {

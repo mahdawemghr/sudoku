@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:sudoku/core/services/sound_service.dart';
 import 'package:sudoku/core/theme/app_colors.dart';
 import 'package:sudoku/data/models/difficulty.dart';
+import 'package:sudoku/data/models/saved_game.dart';
 import 'package:sudoku/data/repositories/game_repository.dart';
 import 'package:sudoku/engine/hint_explainer.dart';
 import 'package:sudoku/features/game/controller/game_controller.dart';
@@ -75,7 +76,14 @@ class _GameScreenState extends ConsumerState<GameScreen>
       };
 
       if (widget.resume) {
-        final saved = await GameRepository().loadCurrentGame();
+        SavedGame? saved;
+        try {
+          saved = await GameRepository().loadCurrentGame();
+        } catch (e) {
+          // Corrupted or schema-incompatible save data — fall back to a new
+          // game instead of leaving the screen stuck on the loading spinner.
+          debugPrint('[GameScreen] loadCurrentGame failed, starting a new game: $e');
+        }
         if (saved != null) {
           await controller.resumeGame(saved);
         } else {
