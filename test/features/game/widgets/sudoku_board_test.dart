@@ -20,6 +20,11 @@ class _FakeController extends GameController {
     state = initial;
   }
 
+  /// Test-only hook: StateNotifier's `state` setter is `@protected`, so
+  /// expose a public way for tests to push a new state and trigger
+  /// SudokuBoard's `ref.listen` callback.
+  void emit(GameState next) => state = next;
+
   @override
   Future<void> startNewGame(Difficulty difficulty) async {}
   @override
@@ -38,12 +43,16 @@ class _FakeController extends GameController {
   void toggleNotesMode() {}
 }
 
-GameState _playingState({List<List<int>>? grid}) {
+GameState _playingState({
+  List<List<int>>? grid,
+  List<List<int>>? solution,
+}) {
   final g = grid ?? List.generate(9, (r) => List<int>.filled(9, 0));
+  final sol = solution ?? List.generate(9, (r) => List<int>.filled(9, 0));
   return GameState.initial().copyWith(
     currentGrid: g,
     puzzle: List.generate(9, (r) => List<int>.filled(9, 0)),
-    solution: List.generate(9, (r) => List<int>.filled(9, 0)),
+    solution: sol,
     phase: GamePhase.playing,
   );
 }
@@ -105,5 +114,114 @@ void main() {
     await tester.pump();
 
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'completing a row (no win) still staggers left-to-right at 48ms/step',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 1080);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final solution = List.generate(9, (r) => List<int>.filled(9, 0));
+    solution[0] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+    final almostRow = List.generate(9, (r) => List<int>.filled(9, 0));
+    almostRow[0] = [1, 2, 3, 4, 5, 6, 7, 8, 0];
+
+    final container = ProviderContainer(overrides: [
+      gameControllerProvider.overrideWith(
+        (ref) =>
+            _FakeController(_playingState(grid: almostRow, solution: solution)),
+      ),
+    ]);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: const Scaffold(body: SudokuBoard()),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final controller =
+        container.read(gameControllerProvider.notifier) as _FakeController;
+    final completedRow =
+        List.generate(9, (r) => List<int>.from(almostRow[r]));
+    completedRow[0][8] = 9;
+    controller.emit(controller.state.copyWith(currentGrid: completedRow));
+    await tester.pump();
+
+    // SudokuCell is keyed by cell index, but its inner digit Text is keyed
+    // by displayed value — both are plain ValueKey<int>, so a bare
+    // find.byKey can collide when an index matches another cell's digit.
+    // Restrict the match to SudokuCell itself.
+    SudokuCell cellAt(int row, int col) => tester.widget<SudokuCell>(
+          find.byWidgetPredicate(
+            (w) => w is SudokuCell && w.key == ValueKey(row * 9 + col),
+          ),
+        );
+
+    expect(cellAt(0, 0).celebrationStep, 0);
+    expect(cellAt(0, 8).celebrationStep, 8);
+    expect(cellAt(1, 0).celebrationStep, isNull);
+
+    // Drain the per-cell staggered Future.delayed calls and the board's
+    // clear timer so no pending Timer outlives the test.
+    await tester.pump(const Duration(milliseconds: 1500));
+  });
+
+  testWidgets(
+      'winning the game triggers a top-left to bottom-right diagonal sweep',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 1080);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final container = ProviderContainer(overrides: [
+      gameControllerProvider.overrideWith(
+        (ref) => _FakeController(_playingState()),
+      ),
+    ]);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: const Scaffold(body: SudokuBoard()),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final controller =
+        container.read(gameControllerProvider.notifier) as _FakeController;
+    controller.emit(controller.state.copyWith(phase: GamePhase.won));
+    await tester.pump();
+
+    // SudokuCell is keyed by cell index, but its inner digit Text is keyed
+    // by displayed value — both are plain ValueKey<int>, so a bare
+    // find.byKey can collide when an index matches another cell's digit.
+    // Restrict the match to SudokuCell itself.
+    SudokuCell cellAt(int row, int col) => tester.widget<SudokuCell>(
+          find.byWidgetPredicate(
+            (w) => w is SudokuCell && w.key == ValueKey(row * 9 + col),
+          ),
+        );
+
+    expect(cellAt(0, 0).celebrationStep, 0);
+    expect(cellAt(3, 4).celebrationStep, 7);
+    expect(cellAt(0, 8).celebrationStep, 8);
+    expect(cellAt(8, 8).celebrationStep, 16);
+
+    // Drain the per-cell staggered Future.delayed calls and the board's
+    // clear timer so no pending Timer outlives the test.
+    await tester.pump(const Duration(milliseconds: 1500));
   });
 }
