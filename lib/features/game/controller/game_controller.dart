@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sudoku/data/models/difficulty.dart';
 import 'package:sudoku/data/models/game_record.dart';
 import 'package:sudoku/data/models/saved_game.dart';
+import 'package:sudoku/core/services/rewarded_ad_service.dart';
 import 'package:sudoku/core/services/sound_service.dart';
 import 'package:sudoku/data/repositories/game_repository.dart';
 import 'package:sudoku/data/repositories/stats_repository.dart';
@@ -46,14 +47,17 @@ class GameController extends StateNotifier<GameState> {
 
   int _totalMistakes = 0;
   final GameSoundPlayer _sound;
+  final RewardedAdProvider _ads;
 
   GameController({
     required GameRepository gameRepository,
     required StatsRepository statsRepository,
     GameSoundPlayer? soundService,
+    RewardedAdProvider? adProvider,
   })  : _gameRepository = gameRepository,
         _statsRepository = statsRepository,
         _sound = soundService ?? SoundService(),
+        _ads = adProvider ?? RewardedAdService(),
         super(GameState.initial()) {
     // Warm the database connection while the user is on the game loading screen
     // so the first game-over DB write is instant.
@@ -100,6 +104,7 @@ class GameController extends StateNotifier<GameState> {
       notes: {},
     );
 
+    _ads.preload();
     _startTimer();
     _persistGame(); // Save immediately so resume works even before the first move.
   }
@@ -125,6 +130,7 @@ class GameController extends StateNotifier<GameState> {
       notes: saved.notes,
     );
 
+    _ads.preload();
     _startTimer();
   }
 
@@ -186,7 +192,7 @@ class GameController extends StateNotifier<GameState> {
 
       final newLives = state.livesLeft - 1;
       if (newLives <= 0) {
-        _sound.playLose();
+        _sound.playWrong(); // not playLose() — the player may still revive
         _stopTimer();
         state = state.copyWith(
           currentGrid: newGrid,
@@ -194,9 +200,8 @@ class GameController extends StateNotifier<GameState> {
           mistakeCells: newMistakes,
           notes: newNotes,
           livesLeft: 0,
-          phase: GamePhase.lost,
+          phase: GamePhase.outOfLives,
         );
-        _onGameOver(won: false);
       } else {
         _sound.playWrong();
         state = state.copyWith(
@@ -378,6 +383,35 @@ class GameController extends StateNotifier<GameState> {
 
   void resumeTimer() {
     if (!_timerRunning && state.phase == GamePhase.playing) _startTimer();
+  }
+
+  /// Shows a rewarded ad and, if the player earns the reward, revives them
+  /// with one life and resumes play. Otherwise finalizes the loss exactly
+  /// like `declineRevive()`. No-op (returns false) outside `outOfLives`.
+  Future<bool> requestRevive() async {
+    if (state.phase != GamePhase.outOfLives) return false;
+    final earned = await _ads.show();
+    if (!mounted) return false;
+    if (earned) {
+      state = state.copyWith(livesLeft: 1, phase: GamePhase.playing);
+      _startTimer();
+      _persistGame();
+      return true;
+    }
+    _finalizeLoss();
+    return false;
+  }
+
+  /// Ends the game without showing an ad. No-op outside `outOfLives`.
+  void declineRevive() {
+    if (state.phase != GamePhase.outOfLives) return;
+    _finalizeLoss();
+  }
+
+  void _finalizeLoss() {
+    _sound.playLose();
+    state = state.copyWith(phase: GamePhase.lost);
+    _onGameOver(won: false);
   }
 
   // ---------------------------------------------------------------------------

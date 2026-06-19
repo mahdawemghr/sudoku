@@ -16,6 +16,7 @@ import 'package:sudoku/features/game/widgets/action_buttons.dart';
 import 'package:sudoku/features/game/widgets/game_hud.dart';
 import 'package:sudoku/features/game/widgets/hint_banner.dart';
 import 'package:sudoku/features/game/widgets/number_pad.dart';
+import 'package:sudoku/features/game/widgets/out_of_lives_dialog.dart';
 import 'package:sudoku/features/game/widgets/sudoku_board.dart';
 
 class GameScreen extends ConsumerStatefulWidget {
@@ -131,6 +132,22 @@ class _GameScreenState extends ConsumerState<GameScreen>
   Widget build(BuildContext context) {
     final gameState = ref.watch(gameControllerProvider);
     final colors = context.appColors;
+
+    ref.listen<GameState>(gameControllerProvider, (previous, next) {
+      final justRanOut = previous?.phase != GamePhase.outOfLives &&
+          next.phase == GamePhase.outOfLives;
+      if (!justRanOut) return;
+
+      final controller = ref.read(gameControllerProvider.notifier);
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => OutOfLivesDialog(
+          onWatchAd: controller.requestRevive,
+          onEndGame: controller.declineRevive,
+        ),
+      );
+    });
 
     return PopScope(
       canPop: false,

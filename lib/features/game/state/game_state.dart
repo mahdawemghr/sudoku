@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:sudoku/data/models/difficulty.dart';
 
-enum GamePhase { loading, playing, won, lost }
+enum GamePhase { loading, playing, outOfLives, won, lost }
 
 /// A snapshot of everything a move can change, pushed onto the undo stack
 /// before that move is applied so undo can fully revert it — not just the

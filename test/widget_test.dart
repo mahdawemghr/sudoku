@@ -8,6 +8,7 @@ void main() {
     await tester.pumpWidget(
       const ProviderScope(child: SudokuNovaApp()),
     );
+    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
 }
