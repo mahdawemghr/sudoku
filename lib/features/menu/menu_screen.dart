@@ -48,7 +48,7 @@ class MenuScreen extends ConsumerWidget {
                       end: Alignment.bottomRight,
                     ).createShader(bounds),
                     child: const Text(
-                      'SUDOKU',
+                      'SUDOKU NOVA',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Colors.white,

@@ -60,6 +60,7 @@ class _OutOfLivesDialogState extends State<OutOfLivesDialog> {
           padding: const EdgeInsets.fromLTRB(28, 32, 28, 28),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               GlowCircle(
                 icon: Icons.heart_broken_rounded,
@@ -70,6 +71,7 @@ class _OutOfLivesDialogState extends State<OutOfLivesDialog> {
               const SizedBox(height: 20),
               Text(
                 'Out of Lives!',
+                textAlign: TextAlign.center,
                 style: TextStyle(
                   color: colors.errorRed,
                   fontSize: 24,
